@@ -272,6 +272,7 @@ bool EntityBase::IsPoint() const {
         case Type::POINT_N_ROT_TRANS:
         case Type::POINT_N_ROT_AA:
         case Type::POINT_N_ROT_AXIS_TRANS:
+        case Type::POINT_N_TRANSFORM:
             return true;
 
         default:
@@ -513,6 +514,16 @@ void EntityBase::PointForceTo(Vector p) {
             break;
         }
 
+        case Type::POINT_N_TRANSFORM: {
+            // [HobbyCAD] force the translation so the copy lands at p, leaving
+            // the live source untouched.
+            Vector trans = p.Minus(SK.GetEntity(point[0])->PointGetNum());
+            SK.GetParam(param[0])->val = trans.x;
+            SK.GetParam(param[1])->val = trans.y;
+            SK.GetParam(param[2])->val = trans.z;
+            break;
+        }
+
         case Type::POINT_N_COPY:
             // Nothing to do; it's a static copy
             break;
@@ -569,6 +580,15 @@ Vector EntityBase::PointGetNum() const {
             p = numPoint.Minus(offset);
             p = q.Rotate(p);
             p = p.Plus(offset).Plus(displace);
+            break;
+        }
+
+        case Type::POINT_N_TRANSFORM: {
+            // [HobbyCAD] live source (point[0]) + solver-adjustable translation
+            Vector trans = Vector::From(SK.GetParam(param[0])->val,
+                                        SK.GetParam(param[1])->val,
+                                        SK.GetParam(param[2])->val);
+            p = SK.GetEntity(point[0])->PointGetNum().Plus(trans);
             break;
         }
 
@@ -633,6 +653,18 @@ ExprVector EntityBase::PointGetExprs() const {
             r = orig.Plus(trans).Plus(displace);
             break;
         }
+        case Type::POINT_N_TRANSFORM: {
+            // [HobbyCAD] Live-source transformed point: the copy tracks a source
+            // entity (point[0]) SYMBOLICALLY plus a solver-adjustable translation
+            // (param[0..2]). Unlike POINT_N_TRANS (a numeric snapshot for
+            // step-and-repeat), the source is live, so the copy follows it through
+            // the solve -- the C-API placement form (cf. realthunder Assembly3).
+            ExprVector src = SK.GetEntity(point[0])->PointGetExprs();
+            ExprVector trans = ExprVector::From(param[0], param[1], param[2]);
+            r = src.Plus(trans);
+            break;
+        }
+
         case Type::POINT_N_COPY:
             r = ExprVector::From(numPoint);
             break;

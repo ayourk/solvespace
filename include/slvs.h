@@ -115,6 +115,7 @@ typedef struct {
 #define SLVS_E_CIRCLE               80003
 #define SLVS_E_ARC_OF_CIRCLE        80004
 #define SLVS_E_RATIONAL_CUBIC       80005  /* [HobbyCAD] rational cubic Bezier */
+#define SLVS_E_TRANSFORM            80006  /* [HobbyCAD] live-source transformed point: a copy of a source point plus a solver-adjustable translation; the copy follows the source. Translate-first; rotate/scale to follow. */
 
 typedef struct {
     Slvs_hEntity    h;
@@ -539,6 +540,10 @@ static const Slvs_Entity SLVS_E_FREE_IN_3D = { 0 };
 
 DLL Slvs_Entity Slvs_AddPoint2D(uint32_t grouph, double u, double v, Slvs_Entity workplane);
 DLL Slvs_Entity Slvs_AddPoint3D(uint32_t grouph, double x, double y, double z);
+#define SLVS_HAS_TRANSFORM 1
+/* [HobbyCAD] SLVS_E_TRANSFORM: a point that is `src` translated by (dx,dy,dz),
+   where the translation is solved. The copy tracks the live source entity. */
+DLL Slvs_Entity Slvs_AddTransform(uint32_t grouph, Slvs_Entity src, double dx, double dy, double dz);
 DLL Slvs_Entity Slvs_AddNormal2D(uint32_t grouph, Slvs_Entity workplane);
 DLL Slvs_Entity Slvs_AddNormal3D(uint32_t grouph, double qw, double qx, double qy, double qz);
 DLL Slvs_Entity Slvs_AddDistance(uint32_t grouph, double value, Slvs_Entity workplane);

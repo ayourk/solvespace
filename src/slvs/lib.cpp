@@ -141,6 +141,7 @@ case SLVS_E_LINE_SEGMENT:       return EntityBase::Type::LINE_SEGMENT;
 case SLVS_E_CUBIC:              return EntityBase::Type::CUBIC;
 case SLVS_E_CIRCLE:             return EntityBase::Type::CIRCLE;
 case SLVS_E_ARC_OF_CIRCLE:      return EntityBase::Type::ARC_OF_CIRCLE;
+case SLVS_E_TRANSFORM:          return EntityBase::Type::POINT_N_TRANSFORM;
 case SLVS_E_RATIONAL_CUBIC:     return EntityBase::Type::RATIONAL_CUBIC;
 default: Platform::FatalError("bad entity type " + std::to_string(type));
     }
@@ -333,6 +334,36 @@ Slvs_Entity Slvs_AddPoint3D(uint32_t grouph, double x, double y, double z) {
     ce.type = SLVS_E_POINT_IN_3D;
     ce.group = grouph;
     ce.wrkpl = SLVS_FREE_IN_3D;
+    ce.param[0] = xph;
+    ce.param[1] = yph;
+    ce.param[2] = zph;
+    return ce;
+}
+
+/* [HobbyCAD] A live-source transformed point: src translated by (dx,dy,dz),
+   the translation being three solver params. The copy follows the source
+   symbolically (unlike POINT_N_TRANS, a numeric step-and-repeat snapshot). */
+Slvs_Entity Slvs_AddTransform(uint32_t grouph, Slvs_Entity src,
+                              double dx, double dy, double dz) {
+    Slvs_hParam xph = Slvs_AddParam(dx);
+    Slvs_hParam yph = Slvs_AddParam(dy);
+    Slvs_hParam zph = Slvs_AddParam(dz);
+    EntityBase e  = {};
+    e.type        = EntityBase::Type::POINT_N_TRANSFORM;
+    e.group.v     = grouph;
+    e.workplane.v = EntityBase::FREE_IN_3D.v;
+    e.point[0].v  = src.h;
+    e.param[0].v  = xph;
+    e.param[1].v  = yph;
+    e.param[2].v  = zph;
+    SK.entity.AddAndAssignId(&e);
+
+    Slvs_Entity ce = Slvs_Entity {};
+    ce.h = e.h.v;
+    ce.type = SLVS_E_TRANSFORM;
+    ce.group = grouph;
+    ce.wrkpl = SLVS_FREE_IN_3D;
+    ce.point[0] = src.h;
     ce.param[0] = xph;
     ce.param[1] = yph;
     ce.param[2] = zph;

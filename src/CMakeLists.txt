@@ -510,16 +510,16 @@ if(APPLE)
                 COMMAND install_name_tool -change ${LIBOMP_LINK_PATH} ${LIBOMP_LINK_PATH_UTILS} $<TARGET_FILE:solvespace-debugtool>
             )
         endif()
-    endif()
-    if(ENABLE_TESTS AND ENABLE_OPENMP)
-        add_custom_command(TARGET solvespace POST_BUILD
-            COMMAND install_name_tool -change ${LIBOMP_LINK_PATH} ${LIBOMP_LINK_PATH_UTILS} $<TARGET_FILE:solvespace-testsuite>)
-    endif()
-    if(ENABLE_CLI)
-        add_custom_command(TARGET solvespace POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:solvespace-cli> $<TARGET_FILE_DIR:solvespace>
-            COMMENT "Bundling executable solvespace-cli"
-            VERBATIM)
+        if(ENABLE_TESTS AND ENABLE_OPENMP)
+            add_custom_command(TARGET solvespace POST_BUILD
+                COMMAND install_name_tool -change ${LIBOMP_LINK_PATH} ${LIBOMP_LINK_PATH_UTILS} $<TARGET_FILE:solvespace-testsuite>)
+        endif()
+        if(ENABLE_CLI)
+            add_custom_command(TARGET solvespace POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:solvespace-cli> $<TARGET_FILE_DIR:solvespace>
+                COMMENT "Bundling executable solvespace-cli"
+                VERBATIM)
+        endif()
     endif()
 endif()
 

@@ -45,6 +45,10 @@
 #define SLVS_HAS_RATIONAL_CUBIC 1
 /* [HobbyCAD] SLVS_C_TANGENT_ANGLE: directed 0-360 tangent-angle dimension. */
 #define SLVS_HAS_TANGENT_ANGLE 1
+/* [HobbyCAD] The array Slvs_Solve() validates constraint operand entity
+ * types and rejects a bad constraint (reported via failed[]) instead of
+ * aborting the whole solve in PointGetExprs. */
+#define SLVS_HAS_OPERAND_VALIDATION 1
 /* [HobbyCAD 0017] SLVS_C_CURVATURE_RATIONAL: dimension signed curvature at a
  * RATIONAL cubic end, honoring the segment's weights. */
 #define SLVS_HAS_CURVATURE_RATIONAL 1

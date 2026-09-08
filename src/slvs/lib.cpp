@@ -1092,6 +1092,30 @@ void Slvs_SetParamValue(uint32_t ph, double value)
     p->val = value;
 }
 
+// [HobbyCAD 0018] Validate a constraint's operand entity types before it
+// reaches equation generation. The array solve path (Slvs_Solve) -- unlike the
+// incremental Slvs_Constrain* helpers -- never type-checked its operands, so a
+// caller that put a NON-POINT handle in a point slot (ptA/ptB), or referenced a
+// handle that names no entity, drove EntityBase::PointGetExprs() to ssassert
+// and aborted the ENTIRE solve ("Unexpected entity type"). ptA/ptB always hold
+// points in SolveSpace's model, so a non-point there is a caller error, not a
+// valid configuration. Returns false for such a constraint so the caller can
+// reject it (report it as failed) instead of crashing the whole system.
+static bool Slvs_ConstraintOperandsValid(const ConstraintBase &c) {
+    auto entExists = [](hEntity h) -> bool {
+        return h.v == 0 || SK.entity.FindByIdNoOops(h) != nullptr;
+    };
+    auto isPointSlot = [](hEntity h) -> bool {
+        if(h.v == 0) return true;                 // an unused slot is fine
+        EntityBase *e = SK.entity.FindByIdNoOops(h);
+        return e != nullptr && e->IsPoint();
+    };
+    if(!isPointSlot(c.ptA) || !isPointSlot(c.ptB)) return false;
+    if(!entExists(c.entityA) || !entExists(c.entityB) ||
+       !entExists(c.entityC) || !entExists(c.entityD)) return false;
+    return true;
+}
+
 void Slvs_Solve(Slvs_System *ssys, uint32_t shg)
 {
     // Hoisted above the guard so the recovery path can release it.
@@ -1136,6 +1160,9 @@ void Slvs_Solve(Slvs_System *ssys, uint32_t shg)
         SK.entity.Add(&e);
     }
     ParamList params = {};
+    // [HobbyCAD 0018] constraints rejected by operand validation, folded into
+    // the reported bad list after the solve.
+    List<hConstraint> rejected = {};
     for(i = 0; i < ssys->constraints; i++) {
         Slvs_Constraint *sc = &(ssys->constraint[i]);
         ConstraintBase c = {};
@@ -1152,6 +1179,13 @@ void Slvs_Solve(Slvs_System *ssys, uint32_t shg)
         c.entityD.v     = sc->entityD;
         c.other         = (sc->other) ? true : false;
         c.other2        = (sc->other2) ? true : false;
+
+        // [HobbyCAD 0018] reject a type-invalid constraint instead of letting
+        // it abort the solve in PointGetExprs.
+        if(!Slvs_ConstraintOperandsValid(c)) {
+            rejected.Add(&c.h);
+            continue;
+        }
 
         c.Generate(&params);
         if(!params.IsEmpty()) {
@@ -1192,6 +1226,11 @@ void Slvs_Solve(Slvs_System *ssys, uint32_t shg)
     // [HobbyCAD] find free params only when the caller wants them (opt-in).
     bool andFindFree = (ssys->freeParams != NULL);
     SolveResult how = SYS.Solve(&g, &(ssys->dof), &bad, andFindBad, andFindFree);
+
+    // [HobbyCAD 0018] surface constraints dropped by operand validation as
+    // failed, so the caller learns which ones were rejected.
+    for(int rj = 0; rj < rejected.n; rj++) bad.Add(&rejected[rj]);
+    rejected.Clear();
 
     switch(how) {
         case SolveResult::OKAY:

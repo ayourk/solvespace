@@ -29,6 +29,8 @@
 /* True for any HobbyCAD-patched libslvs.  Lets a consumer branch on
  * "is this our build at all" without parsing the version string. */
 #define SLVS_IS_HOBBYCAD_BUILD        1
+/* [HobbyCAD] Slvs_System exposes the free (under-constrained) parameters. */
+#define SLVS_HAS_FREE_PARAMS 1
 
 #if defined(WIN32) && !defined(STATIC_LIB)
 #   ifdef EXPORT_DLL
@@ -214,6 +216,15 @@ typedef struct {
 
     /* The solver indicates the number of unconstrained degrees of freedom. */
     int                 dof;
+
+    /* [HobbyCAD] Optional output: the parameters that remain FREE (under-
+     * constrained) after the solve -- the geometry the user can still move.
+     * Opt-in: leave freeParams NULL to skip the extra work (default). To use
+     * it, point freeParams at a caller-allocated buffer of at least `params`
+     * entries; the solver writes the free parameter handles there and sets
+     * nfreeParams to the count. Requires SLVS_HAS_FREE_PARAMS. */
+    Slvs_hParam         *freeParams;
+    int                 nfreeParams;
 
     /* The solver indicates whether the solution succeeded. */
 #define SLVS_RESULT_OKAY                0

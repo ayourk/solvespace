@@ -1118,7 +1118,9 @@ void Slvs_Solve(Slvs_System *ssys, uint32_t shg)
 
     // Now we're finally ready to solve!
     bool andFindBad = ssys->calculateFaileds ? true : false;
-    SolveResult how = SYS.Solve(&g, &(ssys->dof), &bad, andFindBad, /*andFindFree=*/false);
+    // [HobbyCAD] find free params only when the caller wants them (opt-in).
+    bool andFindFree = (ssys->freeParams != NULL);
+    SolveResult how = SYS.Solve(&g, &(ssys->dof), &bad, andFindBad, andFindFree);
 
     switch(how) {
         case SolveResult::OKAY:
@@ -1147,6 +1149,20 @@ void Slvs_Solve(Slvs_System *ssys, uint32_t shg)
         Slvs_Param *sp = &(ssys->param[i]);
         hParam hp = { sp->h };
         sp->val = SK.GetParam(hp)->val;
+    }
+
+    // [HobbyCAD] Report which of the caller's parameters remain free. The
+    // solver set Param::free on each param during Solve() (MarkParamsFree,
+    // gated by andFindFree above); surface the free handles to the caller.
+    if(ssys->freeParams) {
+        int nf = 0;
+        for(i = 0; i < ssys->params; i++) {
+            hParam hp = { ssys->param[i].h };
+            if(SK.GetParam(hp)->free) {
+                ssys->freeParams[nf++] = ssys->param[i].h;
+            }
+        }
+        ssys->nfreeParams = nf;
     }
 
     if(ssys->failed) {

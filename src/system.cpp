@@ -571,7 +571,13 @@ SolveResult System::Solve(Group *g, int *dof, List<hConstraint> *bad,
         Param *pp = SK.GetParam(p.h);
         pp->val = val;
         pp->known = true;
-        pp->free  = p.free;
+        // [HobbyCAD] Propagate free-ness through substitution the same way the
+        // value is: a param eliminated by substitution (e.g. a coincident
+        // point's coord) is free iff the param it was substituted into is
+        // free. Without this, substituted-out params always read constrained,
+        // so coincident free geometry is mis-reported. Only affects the free
+        // flag, only meaningful when andFindFree is on (else all free==false).
+        pp->free  = (it == subMap.end()) ? p.free : it->second->free;
     }
     return rankOk ? SolveResult::OKAY : SolveResult::REDUNDANT_OKAY;
 

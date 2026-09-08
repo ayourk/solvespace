@@ -78,3 +78,27 @@ install(TARGETS slvs
     ARCHIVE       DESTINATION ${CMAKE_INSTALL_LIBDIR}
     PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 # endif()
+
+# pkg-config file. Consumers look for either 'slvs' or 'libslvs'; both names
+# are installed from the same template.
+#
+# CMAKE_INSTALL_LIBDIR and CMAKE_INSTALL_INCLUDEDIR may be absolute or
+# relative, depending on how GNUInstallDirs resolved them; a template that
+# assumes relative yields "libdir=/usr/lib//usr/lib" where they are absolute.
+if(IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
+    set(PKGCONFIG_LIBDIR "${CMAKE_INSTALL_LIBDIR}")
+else()
+    set(PKGCONFIG_LIBDIR "\${prefix}/${CMAKE_INSTALL_LIBDIR}")
+endif()
+if(IS_ABSOLUTE "${CMAKE_INSTALL_INCLUDEDIR}")
+    set(PKGCONFIG_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}")
+else()
+    set(PKGCONFIG_INCLUDEDIR "\${prefix}/${CMAKE_INSTALL_INCLUDEDIR}")
+endif()
+foreach(pc_name slvs libslvs)
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/slvs.pc.in
+                   ${CMAKE_CURRENT_BINARY_DIR}/${pc_name}.pc @ONLY)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${pc_name}.pc
+            COMPONENT   slvs
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+endforeach()

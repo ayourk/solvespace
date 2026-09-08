@@ -96,6 +96,21 @@ bool System::IsDragged(hParam p) {
     return dragged.find(p) != dragged.end();
 }
 
+// [HobbyCAD 0009] Least-squares column weight for a parameter. An explicit
+// paramWeight overrides everything; otherwise a dragged param keeps its 1/20
+// default and every other param is 1.
+double System::WeightOf(hParam p) {
+    std::map<uint32_t, double>::const_iterator it = paramWeight.find(p.v);
+    if(it != paramWeight.end()) {
+        // Stored value is a stiffness/resistance: >1 resists the solve that
+        // many times harder, <1 moves more freely. The column scale is its
+        // reciprocal (a smaller scale keeps a param near its current value).
+        double w = it->second > 1e-12 ? it->second : 1e-12;
+        return 1.0 / w;
+    }
+    return IsDragged(p) ? (1.0 / 20.0) : 1.0;
+}
+
 SubstitutionMap System::SolveBySubstitution() {
     // Contains pointers to last substitutions in a substitution chain
     std::vector<Param *> subVec;
@@ -300,11 +315,10 @@ bool System::SolveLeastSquares() {
     // changes in some parameters, and smaller in others.
     VectorXd scale = VectorXd::Ones(mat.n);
     for(int c = 0; c < mat.n; c++) {
-        if(IsDragged(mat.param[c])) {
-            // It's least squares, so this parameter doesn't need to be all
-            // that big to get a large effect.
-            scale[c] = 1 / 20.0;
-        }
+        // [HobbyCAD 0009] WeightOf keeps the dragged 1/20 default (a dragged
+        // param needs only a small change for a large effect) and applies any
+        // explicit per-param weight a caller set via Slvs_MarkWeight.
+        scale[c] = WeightOf(mat.param[c]);
     }
 
     const int size = mat.A.num.outerSize();
@@ -660,6 +674,7 @@ void System::Clear() {
     param.Clear();
     eq.Clear();
     dragged.clear();
+    paramWeight.clear();
     mat.A.num.setZero();
     mat.A.sym.setZero();
 }

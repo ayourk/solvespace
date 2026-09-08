@@ -31,6 +31,8 @@
 #define SLVS_IS_HOBBYCAD_BUILD        1
 /* [HobbyCAD] Slvs_System exposes the free (under-constrained) parameters. */
 #define SLVS_HAS_FREE_PARAMS 1
+/* [HobbyCAD 0009] Slvs_MarkWeight per-param drag stiffness is available. */
+#define SLVS_HAS_DRAG_WEIGHTS 1
 
 #if defined(WIN32) && !defined(STATIC_LIB)
 #   ifdef EXPORT_DLL
@@ -237,6 +239,17 @@ typedef struct {
  * discarded and rebuilt before solving again. */
 #define SLVS_RESULT_INTERNAL_ERROR      5
     int                 result;
+
+    /* [HobbyCAD 0009] Optional per-parameter drag STIFFNESS, as parallel arrays
+     * of length nweight. weightParam[i] is a parameter handle and weightVal[i]
+     * its resistance: >1 holds it that many times harder (stays near its current
+     * value), <1 moves more freely, ==1 is plain. Leave weightParam NULL to skip.
+     * Composes with `dragged` (which behaves like stiffness 20). Appended at the
+     * struct end so it does not shift any existing field. Requires
+     * SLVS_HAS_DRAG_WEIGHTS. */
+    Slvs_hParam         *weightParam;
+    double              *weightVal;
+    int                 nweight;
 } Slvs_System;
 
 typedef struct {
@@ -534,6 +547,11 @@ DLL void Slvs_SetParamValue(uint32_t ph, double value);
 
 DLL void Slvs_Solve(Slvs_System *sys, uint32_t hg);
 DLL void Slvs_MarkDragged(Slvs_Entity ptA);
+/* [HobbyCAD 0009] Set a point's drag STIFFNESS for the next solve: weight > 1
+ * resists the solve that many times harder (stays near its current position),
+ * weight < 1 moves more freely, weight == 1 is a plain point. A tunable soft fix
+ * beyond the binary dragged/not. Cleared by Slvs_ClearSketch. */
+DLL void Slvs_MarkWeight(Slvs_Entity ptA, double weight);
 /**
  * Setting `bad` to a non NULL pointer enables finding of bad constraints.
  * If such constraints are found, `bad` is set to a heap allocated array containing

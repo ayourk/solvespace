@@ -65,6 +65,7 @@ using namespace SolveSpace;
 
 static System SYS;
 static ParamSet dragged;
+static std::map<uint32_t, double> paramWeight;  // [HobbyCAD 0009]
 
 extern "C" {
 
@@ -881,6 +882,7 @@ void Slvs_MakeQuaternion(double ux, double uy, double uz,
 void Slvs_ClearSketch()
 {
     dragged.clear();
+    paramWeight.clear();
     SYS.Clear();
     SK.param.Clear();
     SK.entity.Clear();
@@ -896,6 +898,22 @@ void Slvs_MarkDragged(Slvs_Entity ptA) {
         }
     } else {
         SolveSpace::Platform::FatalError("Invalid entity for marking dragged");
+    }
+}
+
+// [HobbyCAD 0009] Give a point's parameters a drag STIFFNESS for the next solve.
+// weight > 1 makes the point resist the solve that many times harder (stays near
+// its current position); weight < 1 lets it move more freely; weight == 1 is a
+// plain point. The tunable soft fix, vs the binary dragged/not. Cleared by
+// Slvs_ClearSketch, like the dragged set.
+void Slvs_MarkWeight(Slvs_Entity ptA, double weight) {
+    if(Slvs_IsPoint(ptA)) {
+        const size_t params = Slvs_IsPoint3D(ptA) ? 3 : 2;
+        for(size_t i = 0; i < params; ++i) {
+            paramWeight[ptA.param[i]] = weight;
+        }
+    } else {
+        SolveSpace::Platform::FatalError("Invalid entity for marking weight");
     }
 }
 
@@ -953,6 +971,11 @@ Slvs_SolveResult Slvs_SolveSketch(uint32_t shg, Slvs_hConstraint **bad = nullptr
     // mark dragged params
     for(hParam p : dragged) {
         SYS.dragged.insert(p);
+    }
+    // [HobbyCAD 0009] copy explicit per-param drag weights into the system
+    for(std::map<uint32_t, double>::const_iterator it = paramWeight.begin();
+        it != paramWeight.end(); ++it) {
+        SYS.paramWeight[it->first] = it->second;
     }
 
     // for(hParam &par : SYS.dragged) {
@@ -1109,6 +1132,12 @@ void Slvs_Solve(Slvs_System *ssys, uint32_t shg)
         if(ssys->dragged[i]) {
             hParam hp = { ssys->dragged[i] };
             SYS.dragged.insert(hp);
+        }
+    }
+    // [HobbyCAD 0009] per-parameter drag stiffness from the struct arrays
+    if(ssys->weightParam && ssys->weightVal) {
+        for(i = 0; i < ssys->nweight; i++) {
+            SYS.paramWeight[ssys->weightParam[i]] = ssys->weightVal[i];
         }
     }
 

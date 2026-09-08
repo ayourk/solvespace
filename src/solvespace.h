@@ -90,6 +90,14 @@ public:
     // we should put as close as possible to their initial positions.
     ParamSet                        dragged;
 
+    // [HobbyCAD patch 0009] Per-parameter drag STIFFNESS (resistance). >1 resists
+    // the solve that many times harder (stays near its current value), <1 moves
+    // more freely; a param absent here uses the dragged default. WeightOf() turns
+    // it into the least-squares column scale (1/stiffness). This is the tunable
+    // soft fix -- e.g. hold the far corner of a body N x harder than a plain
+    // point -- instead of the binary dragged/not. Keyed by hParam::v.
+    std::map<uint32_t, double>      paramWeight;
+
     enum {
         // In general, the tag indicates the subsys that a variable/equation
         // has been assigned to; these are exceptions for variables:
@@ -140,6 +148,7 @@ public:
     SubstitutionMap SolveBySubstitution();
 
     bool IsDragged(hParam p);
+    double WeightOf(hParam p);  // [HobbyCAD 0009] least-squares column weight
 
     bool NewtonSolve();
 

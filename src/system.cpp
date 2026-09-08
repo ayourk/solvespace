@@ -240,8 +240,31 @@ SubstitutionMap System::SolveBySubstitution() {
 int System::CalculateRank() {
     using namespace Eigen;
     if(mat.n == 0 || mat.m == 0) return 0;
+    // Column-normalize the Jacobian and use a tight pivot threshold before the
+    // rank test. Eigen's SparseQR calls a column linearly dependent below a
+    // threshold proportional to the largest column norm; our columns mix
+    // dimensionless, length and area magnitudes whose spread grows with the
+    // sketch's physical size, so at large scale a genuine pivot slips under the
+    // threshold and a non-redundant constraint is reported redundant. Scaling
+    // each column to unit norm makes the criterion unit-consistent, and a tight
+    // absolute pivot threshold still catches a true dependency (a near-zero R
+    // diagonal) without flagging a scale artifact. Rank is invariant under
+    // nonsingular column scaling, so only the numerical rank decision changes.
+    SparseMatrix<double> A = mat.A.num;
+    for(int j = 0; j < A.outerSize(); j++) {
+        double norm = 0.0;
+        for(SparseMatrix<double>::InnerIterator it(A, j); it; ++it)
+            norm += it.value() * it.value();
+        norm = sqrt(norm);
+        if(norm > 0.0) {
+            const double inv = 1.0 / norm;
+            for(SparseMatrix<double>::InnerIterator it(A, j); it; ++it)
+                it.valueRef() *= inv;
+        }
+    }
     SparseQR <SparseMatrix<double>, COLAMDOrdering<int>> solver;
-    solver.compute(mat.A.num);
+    solver.setPivotThreshold(1e-9);   // absolute, on unit-normalized columns
+    solver.compute(A);
     int result = solver.rank();
     return result;
 }

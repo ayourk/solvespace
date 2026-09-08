@@ -83,6 +83,7 @@ case SLVS_C_PT_LINE_DISTANCE:    return ConstraintBase::Type::PT_LINE_DISTANCE;
 case SLVS_C_PT_FACE_DISTANCE:    return ConstraintBase::Type::PT_FACE_DISTANCE;
 case SLVS_C_PT_IN_PLANE:         return ConstraintBase::Type::PT_IN_PLANE;
 case SLVS_C_PT_ON_LINE:          return ConstraintBase::Type::PT_ON_LINE;
+case SLVS_C_PT_ON_CUBIC:         return ConstraintBase::Type::PT_ON_CUBIC;
 case SLVS_C_PT_ON_FACE:          return ConstraintBase::Type::PT_ON_FACE;
 case SLVS_C_EQUAL_LENGTH_LINES:  return ConstraintBase::Type::EQUAL_LENGTH_LINES;
 case SLVS_C_LENGTH_RATIO:        return ConstraintBase::Type::LENGTH_RATIO;
@@ -178,6 +179,7 @@ static bool Slvs_CanInitiallySatisfy(const ConstraintBase &c) {
 
     case ConstraintBase::Type::POINTS_COINCIDENT:
     case ConstraintBase::Type::PT_ON_LINE:
+    case ConstraintBase::Type::PT_ON_CUBIC:
     case ConstraintBase::Type::SYMMETRIC:
     case ConstraintBase::Type::SYMMETRIC_HORIZ:
     case ConstraintBase::Type::SYMMETRIC_VERT:

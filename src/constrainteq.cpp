@@ -78,6 +78,7 @@ bool ConstraintBase::IsProjectible() const {
         case Type::ARC_LINE_TANGENT:
         case Type::EQUAL_RADIUS:
         case Type::CURVATURE_CONTINUOUS:
+        case Type::PT_ON_CUBIC:
             return false;
     }
     ssassert(false, "Impossible");
@@ -217,6 +218,19 @@ void ConstraintBase::ModifyToSatisfy() {
         ExprVector exb = eb->PointGetExprsInWorkplane(workplane);
         ExprVector exba = exb.Minus(exa);
         SK.GetParam(valP)->val = exba.Dot(exp.Minus(exa))->Eval() / exba.Dot(exba)->Eval();
+    } else if(type == Type::PT_ON_CUBIC) {
+        // [HobbyCAD] Initial curve parameter t: project the point onto the
+        // control chord P0->P3 (cheap, good enough to start Newton).
+        EntityBase *cub = SK.GetEntity(entityA);
+        ExprVector x0 = SK.GetEntity(cub->point[0])->PointGetExprsInWorkplane(workplane);
+        ExprVector x3 = SK.GetEntity(cub->point[3])->PointGetExprsInWorkplane(workplane);
+        ExprVector xp = SK.GetEntity(ptA)->PointGetExprsInWorkplane(workplane);
+        ExprVector chord = x3.Minus(x0);
+        double denom = chord.Dot(chord)->Eval();
+        double t = (denom > 1e-12) ? chord.Dot(xp.Minus(x0))->Eval() / denom : 0.5;
+        if(t < 0.0) t = 0.0;
+        if(t > 1.0) t = 1.0;
+        SK.GetParam(valP)->val = t;
     } else {
         // We'll fix these ones up by looking at their symbolic equation;
         // that means no extra work.
@@ -258,6 +272,7 @@ void ConstraintBase::Generate(ParamList *l) {
             if(workplane != EntityBase::FREE_IN_3D) break;
             // fallthrough
         case Type::SAME_ORIENTATION:
+        case Type::PT_ON_CUBIC:
         case Type::PT_ON_LINE: {
             Param p = {};
             valP = h.param(0);
@@ -671,6 +686,32 @@ void ConstraintBase::GenerateEquations(IdList<Equation,hEquation> *l,
             ExprVector eq = ptOnLine.Minus(ep);
 
             AddEq(l, eq);
+            return;
+        }
+
+        case Type::PT_ON_CUBIC: {
+            // [HobbyCAD] Point lies on a cubic Bezier segment: P = C(t), the
+            // curve parameter t carried in valP (allocated in Generate, as for
+            // PT_ON_LINE). C(t) = (1-t)^3 P0 + 3(1-t)^2 t P1 + 3(1-t) t^2 P2 +
+            // t^3 P3 over the segment's four control points point[0..3]. The two
+            // component equations remove one point DOF; t stays free (slides).
+            EntityBase *cub = SK.GetEntity(entityA);
+            ExprVector p0 = SK.GetEntity(cub->point[0])->PointGetExprsInWorkplane(workplane);
+            ExprVector p1 = SK.GetEntity(cub->point[1])->PointGetExprsInWorkplane(workplane);
+            ExprVector p2 = SK.GetEntity(cub->point[2])->PointGetExprsInWorkplane(workplane);
+            ExprVector p3 = SK.GetEntity(cub->point[3])->PointGetExprsInWorkplane(workplane);
+            Expr *t  = Expr::From(valP);
+            Expr *u  = Expr::From(1.0)->Minus(t);
+            Expr *b0 = u->Times(u)->Times(u);
+            Expr *b1 = Expr::From(3.0)->Times(u)->Times(u)->Times(t);
+            Expr *b2 = Expr::From(3.0)->Times(u)->Times(t)->Times(t);
+            Expr *b3 = t->Times(t)->Times(t);
+            ExprVector C = p0.ScaledBy(b0)
+                             .Plus(p1.ScaledBy(b1))
+                             .Plus(p2.ScaledBy(b2))
+                             .Plus(p3.ScaledBy(b3));
+            ExprVector ep = SK.GetEntity(ptA)->PointGetExprsInWorkplane(workplane);
+            AddEq(l, C.Minus(ep));
             return;
         }
 

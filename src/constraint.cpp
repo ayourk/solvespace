@@ -45,6 +45,7 @@ std::string Constraint::DescriptionString() const {
         case Type::CUBIC_LINE_TANGENT:  s = C_("constr-name", "cubic-line-tangent"); break;
         case Type::CURVE_CURVE_TANGENT: s = C_("constr-name", "curve-curve-tangent"); break;
         case Type::CURVATURE_CONTINUOUS: s = C_("constr-name", "curvature-continuous"); break;
+        case Type::PT_ON_CUBIC:         s = C_("constr-name", "pt-on-cubic"); break;
         case Type::PERPENDICULAR:       s = C_("constr-name", "perpendicular"); break;
         case Type::EQUAL_RADIUS:        s = C_("constr-name", "eq-radius"); break;
         case Type::EQUAL_ANGLE:         s = C_("constr-name", "eq-angle"); break;

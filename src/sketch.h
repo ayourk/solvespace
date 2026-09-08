@@ -693,6 +693,7 @@ public:
         CUBIC_LINE_TANGENT     = 124,
         CURVE_CURVE_TANGENT    = 125,
         CURVATURE_CONTINUOUS   = 126,  // [HobbyCAD G2]
+        PT_ON_CUBIC            = 127,  // [HobbyCAD]
         EQUAL_RADIUS           = 130,
         WHERE_DRAGGED          = 200,
         ARC_ARC_LEN_RATIO      = 210,

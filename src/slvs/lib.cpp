@@ -144,6 +144,7 @@ case SLVS_E_ARC_OF_CIRCLE:      return EntityBase::Type::ARC_OF_CIRCLE;
 case SLVS_E_TRANSFORM:          return EntityBase::Type::POINT_N_TRANSFORM;
 case SLVS_E_TRANSFORM_ROT:      return EntityBase::Type::POINT_N_TRANSFORM_ROT;
 case SLVS_E_TRANSFORM_SCALE:    return EntityBase::Type::POINT_N_TRANSFORM_SCALE;
+case SLVS_E_TRANSFORM_ROT3D:    return EntityBase::Type::POINT_N_TRANSFORM_ROT3D;
 case SLVS_E_RATIONAL_CUBIC:     return EntityBase::Type::RATIONAL_CUBIC;
 default: Platform::FatalError("bad entity type " + std::to_string(type));
     }
@@ -433,6 +434,43 @@ Slvs_Entity Slvs_AddTransformScale(uint32_t grouph, Slvs_Entity src,
     ce.param[1] = yph;
     ce.param[2] = zph;
     ce.param[3] = sph;
+    return ce;
+}
+
+/* [HobbyCAD] Live-source point rotated about a fixed arbitrary axis (ax,ay,az;
+   normalized and held constant in numPoint -- not a solver param) by `angle`
+   (radians, solved), then translated by (dx,dy,dz) (solved). */
+Slvs_Entity Slvs_AddTransformRot3D(uint32_t grouph, Slvs_Entity src,
+                                   double dx, double dy, double dz,
+                                   double ax, double ay, double az, double angle) {
+    Slvs_hParam xph = Slvs_AddParam(dx);
+    Slvs_hParam yph = Slvs_AddParam(dy);
+    Slvs_hParam zph = Slvs_AddParam(dz);
+    Slvs_hParam aph = Slvs_AddParam(angle);
+    EntityBase e  = {};
+    e.type        = EntityBase::Type::POINT_N_TRANSFORM_ROT3D;
+    e.group.v     = grouph;
+    e.workplane.v = EntityBase::FREE_IN_3D.v;
+    e.point[0].v  = src.h;
+    double m = sqrt(ax*ax + ay*ay + az*az);
+    if(m > 0) { ax /= m; ay /= m; az /= m; }
+    e.numPoint    = Vector::From(ax, ay, az);   // fixed unit rotation axis
+    e.param[0].v  = xph;
+    e.param[1].v  = yph;
+    e.param[2].v  = zph;
+    e.param[3].v  = aph;
+    SK.entity.AddAndAssignId(&e);
+
+    Slvs_Entity ce = Slvs_Entity {};
+    ce.h = e.h.v;
+    ce.type = SLVS_E_TRANSFORM_ROT3D;
+    ce.group = grouph;
+    ce.wrkpl = SLVS_FREE_IN_3D;
+    ce.point[0] = src.h;
+    ce.param[0] = xph;
+    ce.param[1] = yph;
+    ce.param[2] = zph;
+    ce.param[3] = aph;
     return ce;
 }
 

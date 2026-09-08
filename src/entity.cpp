@@ -275,6 +275,7 @@ bool EntityBase::IsPoint() const {
         case Type::POINT_N_TRANSFORM:
         case Type::POINT_N_TRANSFORM_ROT:
         case Type::POINT_N_TRANSFORM_SCALE:
+        case Type::POINT_N_TRANSFORM_ROT3D:
             return true;
 
         default:
@@ -550,6 +551,19 @@ void EntityBase::PointForceTo(Vector p) {
             break;
         }
 
+        case Type::POINT_N_TRANSFORM_ROT3D: {
+            // [HobbyCAD] force translation, holding axis (numPoint) and angle.
+            double th = SK.GetParam(param[3])->val, c = cos(th), s = sin(th);
+            Vector v = SK.GetEntity(point[0])->PointGetNum(), k = numPoint;
+            Vector rot = v.ScaledBy(c).Plus(k.Cross(v).ScaledBy(s))
+                          .Plus(k.ScaledBy(k.Dot(v)*(1.0-c)));
+            Vector trans = p.Minus(rot);
+            SK.GetParam(param[0])->val = trans.x;
+            SK.GetParam(param[1])->val = trans.y;
+            SK.GetParam(param[2])->val = trans.z;
+            break;
+        }
+
         case Type::POINT_N_COPY:
             // Nothing to do; it's a static copy
             break;
@@ -642,6 +656,21 @@ Vector EntityBase::PointGetNum() const {
                                         SK.GetParam(param[1])->val,
                                         SK.GetParam(param[2])->val);
             p = src.Plus(trans);
+            break;
+        }
+
+        case Type::POINT_N_TRANSFORM_ROT3D: {
+            // [HobbyCAD] live source rotated about a FIXED unit axis (numPoint,
+            // caller-supplied numeric -- not a solver param, so no unit-norm to
+            // maintain) by a free angle param[3] (Rodrigues), then translated.
+            double th = SK.GetParam(param[3])->val, c = cos(th), s = sin(th);
+            Vector v = SK.GetEntity(point[0])->PointGetNum(), k = numPoint;
+            Vector rot = v.ScaledBy(c).Plus(k.Cross(v).ScaledBy(s))
+                          .Plus(k.ScaledBy(k.Dot(v)*(1.0-c)));
+            Vector trans = Vector::From(SK.GetParam(param[0])->val,
+                                        SK.GetParam(param[1])->val,
+                                        SK.GetParam(param[2])->val);
+            p = rot.Plus(trans);
             break;
         }
 
@@ -741,6 +770,23 @@ ExprVector EntityBase::PointGetExprs() const {
                                .ScaledBy(Expr::From(param[3]));
             ExprVector trans = ExprVector::From(param[0], param[1], param[2]);
             r = src.Plus(trans);
+            break;
+        }
+
+        case Type::POINT_N_TRANSFORM_ROT3D: {
+            // [HobbyCAD] Rodrigues rotation of the live source about the fixed
+            // unit axis numPoint by free angle param[3], then translate.
+            ExprVector v = SK.GetEntity(point[0])->PointGetExprs();
+            ExprVector k = ExprVector::From(Expr::From(numPoint.x),
+                                            Expr::From(numPoint.y),
+                                            Expr::From(numPoint.z));
+            Expr *th = Expr::From(param[3]);
+            Expr *c = th->Cos(), *sn = th->Sin();
+            ExprVector rot = v.ScaledBy(c)
+                              .Plus(k.Cross(v).ScaledBy(sn))
+                              .Plus(k.ScaledBy(k.Dot(v)->Times(Expr::From(1.0)->Minus(c))));
+            ExprVector trans = ExprVector::From(param[0], param[1], param[2]);
+            r = rot.Plus(trans);
             break;
         }
 

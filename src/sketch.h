@@ -430,6 +430,7 @@ public:
         POINT_N_TRANSFORM      =  2015,  // [HobbyCAD] live-source transformed point (C-API SLVS_E_TRANSFORM)
         POINT_N_TRANSFORM_ROT  =  2016,  // [HobbyCAD] live-source rotate(Z, free angle)+translate
         POINT_N_TRANSFORM_SCALE=  2017,  // [HobbyCAD] live-source uniform scale about origin+translate
+        POINT_N_TRANSFORM_ROT3D=  2018,  // [HobbyCAD] live-source rotate about a fixed axis (numPoint) by a free angle+translate
 
         NORMAL_IN_3D           =  3000,
         NORMAL_IN_2D           =  3001,

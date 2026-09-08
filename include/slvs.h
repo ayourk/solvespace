@@ -10,6 +10,26 @@
 #ifndef __SLVS_H
 #define __SLVS_H
 
+/* ------------------------------------------------------------------
+ * HobbyCAD patch-series identification.
+ *
+ * Upstream SolveSpace release this is based on, plus the revision of the
+ * local patch series applied on top.  A library reporting "3.2p1" carries
+ * the fatal-error handoff (0002) and the unwind-and-report behaviour (0003);
+ * a stock "3.2" carries neither and will abort() the host process on a
+ * kernel assertion.
+ *
+ * Test the FEATURE macros, not this string, when deciding what the library
+ * can do.
+ * ------------------------------------------------------------------ */
+#define SLVS_UPSTREAM_VERSION_STRING  "3.2"
+#define SLVS_HOBBYCAD_PATCHLEVEL      1
+#define SLVS_VERSION_STRING           "3.2p1"
+
+/* True for any HobbyCAD-patched libslvs.  Lets a consumer branch on
+ * "is this our build at all" without parsing the version string. */
+#define SLVS_IS_HOBBYCAD_BUILD        1
+
 #if defined(WIN32) && !defined(STATIC_LIB)
 #   ifdef EXPORT_DLL
 #       define DLL __declspec( dllexport )

@@ -273,6 +273,7 @@ bool EntityBase::IsPoint() const {
         case Type::POINT_N_ROT_AA:
         case Type::POINT_N_ROT_AXIS_TRANS:
         case Type::POINT_N_TRANSFORM:
+        case Type::POINT_N_TRANSFORM_ROT:
             return true;
 
         default:
@@ -524,6 +525,19 @@ void EntityBase::PointForceTo(Vector p) {
             break;
         }
 
+        case Type::POINT_N_TRANSFORM_ROT: {
+            // [HobbyCAD] force the translation, holding the angle, so the copy
+            // lands at p.
+            double th = SK.GetParam(param[3])->val, c = cos(th), s = sin(th);
+            Vector o = SK.GetEntity(point[0])->PointGetNum();
+            Vector rot = Vector::From(o.x*c - o.y*s, o.x*s + o.y*c, o.z);
+            Vector trans = p.Minus(rot);
+            SK.GetParam(param[0])->val = trans.x;
+            SK.GetParam(param[1])->val = trans.y;
+            SK.GetParam(param[2])->val = trans.z;
+            break;
+        }
+
         case Type::POINT_N_COPY:
             // Nothing to do; it's a static copy
             break;
@@ -589,6 +603,20 @@ Vector EntityBase::PointGetNum() const {
                                         SK.GetParam(param[1])->val,
                                         SK.GetParam(param[2])->val);
             p = SK.GetEntity(point[0])->PointGetNum().Plus(trans);
+            break;
+        }
+
+        case Type::POINT_N_TRANSFORM_ROT: {
+            // [HobbyCAD] live source rotated about Z by a free angle, then
+            // translated. Planar rotation avoids the free-quaternion unit-norm
+            // hazard; arbitrary-axis 3D is a later increment.
+            double th = SK.GetParam(param[3])->val, c = cos(th), s = sin(th);
+            Vector o = SK.GetEntity(point[0])->PointGetNum();
+            Vector rot = Vector::From(o.x*c - o.y*s, o.x*s + o.y*c, o.z);
+            Vector trans = Vector::From(SK.GetParam(param[0])->val,
+                                        SK.GetParam(param[1])->val,
+                                        SK.GetParam(param[2])->val);
+            p = rot.Plus(trans);
             break;
         }
 
@@ -662,6 +690,22 @@ ExprVector EntityBase::PointGetExprs() const {
             ExprVector src = SK.GetEntity(point[0])->PointGetExprs();
             ExprVector trans = ExprVector::From(param[0], param[1], param[2]);
             r = src.Plus(trans);
+            break;
+        }
+
+        case Type::POINT_N_TRANSFORM_ROT: {
+            // [HobbyCAD] live source rotated about Z by free angle param[3],
+            // then translated by param[0..2]. Planar (Z) rotation keeps a single
+            // free angle -- no quaternion unit-norm to maintain.
+            ExprVector src = SK.GetEntity(point[0])->PointGetExprs();
+            Expr *th = Expr::From(param[3]);
+            Expr *c = th->Cos(), *sn = th->Sin();
+            ExprVector rot = ExprVector::From(
+                src.x->Times(c)->Minus(src.y->Times(sn)),
+                src.x->Times(sn)->Plus(src.y->Times(c)),
+                src.z);
+            ExprVector trans = ExprVector::From(param[0], param[1], param[2]);
+            r = rot.Plus(trans);
             break;
         }
 

@@ -13,6 +13,16 @@ namespace SolveSpace {
 
 Sketch SK = {};
 
+// Thrown when the host asks to unwind. Private to this file: it is
+// caught at the guarded entry point and never crosses extern "C".
+namespace { struct SlvsRecoverableError {}; }
+
+// True only while control is inside an entry point that can catch the
+// throw above. Unwinding from anywhere else would reach no handler and
+// call std::terminate(), which is strictly worse than the abort() this
+// is meant to avoid, so outside a guarded call we still abort.
+static bool g_inGuardedCall = false;
+
 static Slvs_FatalErrorHandler g_fatalErrorHandler  = NULL;
 static void                  *g_fatalErrorContext  = NULL;
 static bool                   g_inFatalErrorHandler = false;
@@ -38,7 +48,10 @@ static Slvs_FatalErrorAction Slvs_HandoffToHost(const char *message) {
 }
 
 void Platform::FatalError(const std::string &message) {
-    Slvs_HandoffToHost(message.c_str());
+    if(Slvs_HandoffToHost(message.c_str()) == SLVS_FATAL_RETURN_ERROR
+           && g_inGuardedCall) {
+        throw SlvsRecoverableError();
+    }
     abort();
 }
 
@@ -1016,6 +1029,10 @@ void Slvs_SetParamValue(uint32_t ph, double value)
 
 void Slvs_Solve(Slvs_System *ssys, uint32_t shg)
 {
+    // Hoisted above the guard so the recovery path can release it.
+    List<hConstraint> bad = {};
+    g_inGuardedCall = true;
+    try {
     SYS.Clear();
     SK.param.Clear();
     SK.entity.Clear();
@@ -1098,7 +1115,6 @@ void Slvs_Solve(Slvs_System *ssys, uint32_t shg)
     Group g = {};
     g.h.v = shg;
 
-    List<hConstraint> bad = {};
 
     // Now we're finally ready to solve!
     bool andFindBad = ssys->calculateFaileds ? true : false;
@@ -1148,6 +1164,24 @@ void Slvs_Solve(Slvs_System *ssys, uint32_t shg)
     SK.constraint.Clear();
 
     Platform::FreeAllTemporary();
+
+    } catch(const SlvsRecoverableError &) {
+        // The same teardown the normal path performs, so the next call
+        // starts from a clean sketch rather than inheriting half-built
+        // state. SK is a file-scope global; skipping this would corrupt
+        // the following solve, not merely leak.
+        bad.Clear();
+        SYS.Clear();
+        SK.param.Clear();
+        SK.entity.Clear();
+        SK.constraint.Clear();
+        Platform::FreeAllTemporary();
+
+        ssys->result  = SLVS_RESULT_INTERNAL_ERROR;
+        ssys->dof     = -1;
+        ssys->faileds = 0;
+    }
+    g_inGuardedCall = false;
 }
 
 } /* extern "C" */

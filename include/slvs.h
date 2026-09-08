@@ -201,6 +201,10 @@ typedef struct {
 #define SLVS_RESULT_DIDNT_CONVERGE      2
 #define SLVS_RESULT_TOO_MANY_UNKNOWNS   3
 #define SLVS_RESULT_REDUNDANT_OKAY      4
+/* The library hit a condition it could not continue from and the
+ * installed handler asked it to return. The system should be
+ * discarded and rebuilt before solving again. */
+#define SLVS_RESULT_INTERNAL_ERROR      5
     int                 result;
 } Slvs_System;
 

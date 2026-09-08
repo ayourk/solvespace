@@ -33,6 +33,8 @@
 #define SLVS_HAS_FREE_PARAMS 1
 /* [HobbyCAD 0009] Slvs_MarkWeight per-param drag stiffness is available. */
 #define SLVS_HAS_DRAG_WEIGHTS 1
+/* [HobbyCAD G2] SLVS_C_CURVATURE_CONTINUOUS: equal curvature at two cubic ends. */
+#define SLVS_HAS_CURVATURE 1
 
 #if defined(WIN32) && !defined(STATIC_LIB)
 #   ifdef EXPORT_DLL
@@ -137,6 +139,7 @@ typedef struct {
 #define SLVS_C_PROJ_PT_DISTANCE         100030
 #define SLVS_C_WHERE_DRAGGED            100031
 #define SLVS_C_CURVE_CURVE_TANGENT      100032
+#define SLVS_C_CURVATURE_CONTINUOUS     100038  /* [HobbyCAD G2] */
 #define SLVS_C_LENGTH_DIFFERENCE        100033
 #define SLVS_C_ARC_ARC_LEN_RATIO        100034
 #define SLVS_C_ARC_LINE_LEN_RATIO       100035

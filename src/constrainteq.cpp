@@ -77,6 +77,7 @@ bool ConstraintBase::IsProjectible() const {
         case Type::CURVE_CURVE_TANGENT:
         case Type::ARC_LINE_TANGENT:
         case Type::EQUAL_RADIUS:
+        case Type::CURVATURE_CONTINUOUS:
             return false;
     }
     ssassert(false, "Impossible");
@@ -1009,6 +1010,35 @@ void ConstraintBase::GenerateEquations(IdList<Equation,hEquation> *l,
             } else {
                 AddEq(l, (dir[0]).Dot(dir[1]), 0);
             }
+            return;
+        }
+
+        case Type::CURVATURE_CONTINUOUS: {
+            // [HobbyCAD G2] Equal SIGNED curvature at two cubic ends (already
+            // coincident + tangent by companion constraints). other/other2 pick
+            // finish vs start of each. Signed planar curvature k = (T x S).n /
+            // |T|^3 with T = tangent (first deriv), S = second deriv. Orient both
+            // tangents into the same flow so the signs compare (the start-tangent
+            // accessor points backward, so negate it; the second derivative is
+            // even under reversal, so it is not negated). Cross-multiply by the
+            // |T|^3 terms to avoid division:
+            //   (Ta x Sa).n * |Tb|^3  -  (Tb x Sb).n * |Ta|^3 = 0.
+            EntityBase *ca = SK.GetEntity(entityA), *cb = SK.GetEntity(entityB);
+            ExprVector Ta = other  ? ca->CubicGetFinishTangentExprs()
+                                   : ca->CubicGetStartTangentExprs().ScaledBy(Expr::From(-1.0));
+            ExprVector Sa = other  ? ca->CubicGetFinishSecondDerivExprs()
+                                   : ca->CubicGetStartSecondDerivExprs();
+            ExprVector Tb = other2 ? cb->CubicGetFinishTangentExprs()
+                                   : cb->CubicGetStartTangentExprs().ScaledBy(Expr::From(-1.0));
+            ExprVector Sb = other2 ? cb->CubicGetFinishSecondDerivExprs()
+                                   : cb->CubicGetStartSecondDerivExprs();
+            EntityBase *w = SK.GetEntity(workplane);
+            ExprVector n = w->Normal()->NormalExprsN();
+            Expr *ka = (Ta.Cross(Sa)).Dot(n);
+            Expr *kb = (Tb.Cross(Sb)).Dot(n);
+            Expr *ma3 = Ta.Dot(Ta)->Times(Ta.Magnitude());   // |Ta|^3
+            Expr *mb3 = Tb.Dot(Tb)->Times(Tb.Magnitude());   // |Tb|^3
+            AddEq(l, ka->Times(mb3)->Minus(kb->Times(ma3)), 0);
             return;
         }
 

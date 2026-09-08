@@ -183,6 +183,21 @@ ExprVector EntityBase::CubicGetFinishTangentExprs() const {
                poff = SK.GetEntity(point[2+extraPoints])->PointGetExprs();
     return (pon.Minus(poff));
 }
+// [HobbyCAD G2] Second derivative direction of the cubic at its ends. For a
+// Bezier segment P''(0) ~ P0 - 2 P1 + P2 and P''(1) ~ P3 - 2 P2 + P1; combined
+// with the (first-derivative) tangent it gives the signed curvature.
+ExprVector EntityBase::CubicGetStartSecondDerivExprs() const {
+    ExprVector p0 = SK.GetEntity(point[0])->PointGetExprs(),
+               p1 = SK.GetEntity(point[1])->PointGetExprs(),
+               p2 = SK.GetEntity(point[2])->PointGetExprs();
+    return p0.Minus(p1.ScaledBy(Expr::From(2.0))).Plus(p2);
+}
+ExprVector EntityBase::CubicGetFinishSecondDerivExprs() const {
+    ExprVector p3 = SK.GetEntity(point[3+extraPoints])->PointGetExprs(),
+               p2 = SK.GetEntity(point[2+extraPoints])->PointGetExprs(),
+               p1 = SK.GetEntity(point[1+extraPoints])->PointGetExprs();
+    return p3.Minus(p2.ScaledBy(Expr::From(2.0))).Plus(p1);
+}
 Vector EntityBase::CubicGetStartTangentNum() const {
     Vector pon  = SK.GetEntity(point[0])->PointGetNum(),
            poff = SK.GetEntity(point[1])->PointGetNum();

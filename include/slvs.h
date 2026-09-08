@@ -55,6 +55,9 @@
 /* [HobbyCAD 0016] SLVS_C_TANGENT_ANGLE_RATIONAL: directed tangent-angle at a
  * RATIONAL cubic end (computed from the weighted forward tangent). */
 #define SLVS_HAS_TANGENT_ANGLE_RATIONAL 1
+/* [HobbyCAD 0019] SLVS_C_ARC_MIDPOINT: constrain a point to an arc's midpoint
+ * (the perimeter point at the angular mid of the arc). */
+#define SLVS_HAS_ARC_MIDPOINT 1
 
 #if defined(WIN32) && !defined(STATIC_LIB)
 #   ifdef EXPORT_DLL
@@ -167,6 +170,7 @@ typedef struct {
 #define SLVS_C_TANGENT_ANGLE            100042  /* [HobbyCAD] directed tangent-angle dim */
 #define SLVS_C_CURVATURE_RATIONAL       100043  /* [HobbyCAD] curvature dim, rational cubic */
 #define SLVS_C_TANGENT_ANGLE_RATIONAL   100044  /* [HobbyCAD] tangent-angle dim, rational cubic */
+#define SLVS_C_ARC_MIDPOINT             100045  /* [HobbyCAD] point at an arc's midpoint */
 #define SLVS_C_LENGTH_DIFFERENCE        100033
 #define SLVS_C_ARC_ARC_LEN_RATIO        100034
 #define SLVS_C_ARC_LINE_LEN_RATIO       100035

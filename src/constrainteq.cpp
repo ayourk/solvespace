@@ -88,6 +88,7 @@ bool ConstraintBase::IsProjectible() const {
         case Type::TANGENT_ANGLE:
         case Type::CURVATURE_RATIONAL:
         case Type::TANGENT_ANGLE_RATIONAL:
+        case Type::ARC_MIDPOINT:
             return false;
     }
     ssassert(false, "Impossible");
@@ -1279,6 +1280,27 @@ void ConstraintBase::GenerateEquations(IdList<Equation,hEquation> *l,
             Expr *st = Expr::From(sin(th));
             // T x (cos,sin) = 0  <=>  tu*sin - tv*cos = 0 (parallel to target)
             AddEq(l, tu->Times(st)->Minus(tv->Times(ct)), 0);
+            return;
+        }
+
+        case Type::ARC_MIDPOINT: {
+            // [HobbyCAD 0019] Constrain point ptA to an arc's midpoint. With the
+            // arc's center C, start S and end E (all on the same circle), the
+            // angular midpoint is the point P that is (1) on the circle,
+            // |P-C| = |S-C|, and (2) on the perpendicular bisector of chord SE,
+            // (P-C).(E-S) = 0 -- where the equidistant midpoint always lies. That
+            // bisector passes through C and is well defined for every arc,
+            // including the 180-degree case (unlike the angle-sum bisector, which
+            // degenerates there). Two equations remove two DOF; the near/far
+            // circle-bisector intersections are separated by ptA's seeded position.
+            EntityBase *arc = SK.GetEntity(entityA);
+            ExprVector C = SK.GetEntity(arc->point[0])->PointGetExprs();
+            ExprVector S = SK.GetEntity(arc->point[1])->PointGetExprs();
+            ExprVector E = SK.GetEntity(arc->point[2])->PointGetExprs();
+            ExprVector P = SK.GetEntity(ptA)->PointGetExprs();
+            ExprVector PC = P.Minus(C), SC = S.Minus(C), ES = E.Minus(S);
+            AddEq(l, PC.Dot(PC)->Minus(SC.Dot(SC)), 0);   // |P-C| = |S-C| = r
+            AddEq(l, PC.Dot(ES), 1);                       // P-C _|_ chord S->E
             return;
         }
 

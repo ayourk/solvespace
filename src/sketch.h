@@ -701,6 +701,7 @@ public:
         TANGENT_ANGLE          = 131,  // [HobbyCAD] directed tangent-angle dimension
         CURVATURE_RATIONAL     = 132,  // [HobbyCAD] curvature dim on a rational cubic
         TANGENT_ANGLE_RATIONAL = 133,  // [HobbyCAD] tangent-angle dim on a rational cubic
+        ARC_MIDPOINT           = 134,  // [HobbyCAD] point at an arc's midpoint
         WHERE_DRAGGED          = 200,
         ARC_ARC_LEN_RATIO      = 210,
         ARC_LINE_LEN_RATIO     = 211,

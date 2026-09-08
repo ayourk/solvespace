@@ -84,6 +84,7 @@ case SLVS_C_PT_FACE_DISTANCE:    return ConstraintBase::Type::PT_FACE_DISTANCE;
 case SLVS_C_PT_IN_PLANE:         return ConstraintBase::Type::PT_IN_PLANE;
 case SLVS_C_PT_ON_LINE:          return ConstraintBase::Type::PT_ON_LINE;
 case SLVS_C_PT_ON_CUBIC:         return ConstraintBase::Type::PT_ON_CUBIC;
+case SLVS_C_CURVATURE:           return ConstraintBase::Type::CURVATURE;
 case SLVS_C_PT_ON_FACE:          return ConstraintBase::Type::PT_ON_FACE;
 case SLVS_C_EQUAL_LENGTH_LINES:  return ConstraintBase::Type::EQUAL_LENGTH_LINES;
 case SLVS_C_LENGTH_RATIO:        return ConstraintBase::Type::LENGTH_RATIO;
@@ -158,6 +159,7 @@ static bool Slvs_CanInitiallySatisfy(const ConstraintBase &c) {
     case ConstraintBase::Type::ARC_ARC_DIFFERENCE:
     case ConstraintBase::Type::ARC_LINE_DIFFERENCE:
     case ConstraintBase::Type::DIAMETER:
+    case ConstraintBase::Type::CURVATURE:
     case ConstraintBase::Type::EQUAL_RADIUS:
     case ConstraintBase::Type::EQUAL_LINE_ARC_LEN:
     case ConstraintBase::Type::PT_IN_PLANE:

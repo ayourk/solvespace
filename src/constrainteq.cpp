@@ -26,6 +26,7 @@ bool ConstraintBase::HasLabel() const {
         case Type::ARC_ARC_DIFFERENCE: 
         case Type::ARC_LINE_DIFFERENCE:
         case Type::ANGLE:
+        case Type::CURVATURE:
         case Type::COMMENT:
             return true;
 
@@ -79,6 +80,7 @@ bool ConstraintBase::IsProjectible() const {
         case Type::EQUAL_RADIUS:
         case Type::CURVATURE_CONTINUOUS:
         case Type::PT_ON_CUBIC:
+        case Type::CURVATURE:
             return false;
     }
     ssassert(false, "Impossible");
@@ -1100,6 +1102,24 @@ void ConstraintBase::GenerateEquations(IdList<Equation,hEquation> *l,
             Expr *ma3 = Ta.Dot(Ta)->Times(Ta.Magnitude());   // |Ta|^3
             Expr *mb3 = Tb.Dot(Tb)->Times(Tb.Magnitude());   // |Tb|^3
             AddEq(l, ka->Times(mb3)->Minus(kb->Times(ma3)), 0);
+            return;
+        }
+
+        case Type::CURVATURE: {
+            // [HobbyCAD 0013] Dimension the signed curvature at a cubic end to
+            // valA. other picks finish(1)/start(0). k = (T x S).n / |T|^3 with T
+            // the forward tangent (negate the start accessor) and S the second
+            // derivative. valA is signed curvature (1/length), well defined even
+            // for a near-straight end (k ~ 0) where a radius dimension blows up.
+            EntityBase *c = SK.GetEntity(entityA);
+            ExprVector T = other ? c->CubicGetFinishTangentExprs()
+                                 : c->CubicGetStartTangentExprs().ScaledBy(Expr::From(-1.0));
+            ExprVector S = other ? c->CubicGetFinishSecondDerivExprs()
+                                 : c->CubicGetStartSecondDerivExprs();
+            EntityBase *w = SK.GetEntity(workplane);
+            ExprVector n = w->Normal()->NormalExprsN();
+            Expr *k = ((T.Cross(S)).Dot(n))->Div(T.Dot(T)->Times(T.Magnitude()));
+            AddEq(l, k->Minus(Expr::From(valA)), 0);
             return;
         }
 

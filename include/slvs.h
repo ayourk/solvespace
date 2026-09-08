@@ -39,6 +39,8 @@
 #define SLVS_HAS_PT_ON_CUBIC 1
 /* [HobbyCAD] CURVATURE_CONTINUOUS also accepts an arc on either side. */
 #define SLVS_HAS_CURVATURE_ARC 1
+/* [HobbyCAD] SLVS_C_CURVATURE: dimension signed curvature at a cubic end. */
+#define SLVS_HAS_CURVATURE_DIM 1
 
 #if defined(WIN32) && !defined(STATIC_LIB)
 #   ifdef EXPORT_DLL
@@ -145,6 +147,7 @@ typedef struct {
 #define SLVS_C_CURVE_CURVE_TANGENT      100032
 #define SLVS_C_CURVATURE_CONTINUOUS     100038  /* [HobbyCAD G2] */
 #define SLVS_C_PT_ON_CUBIC              100039  /* [HobbyCAD] point on cubic */
+#define SLVS_C_CURVATURE                100040  /* [HobbyCAD] curvature dimension */
 #define SLVS_C_LENGTH_DIFFERENCE        100033
 #define SLVS_C_ARC_ARC_LEN_RATIO        100034
 #define SLVS_C_ARC_LINE_LEN_RATIO       100035

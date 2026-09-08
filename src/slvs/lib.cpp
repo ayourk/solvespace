@@ -13,8 +13,32 @@ namespace SolveSpace {
 
 Sketch SK = {};
 
+static Slvs_FatalErrorHandler g_fatalErrorHandler  = NULL;
+static void                  *g_fatalErrorContext  = NULL;
+static bool                   g_inFatalErrorHandler = false;
+
+// The single point at which the library gives up and hands control to the
+// host. Everything that would otherwise abort() outright funnels through
+// here, so there is one place to audit, test, and reason about.
+//
+// Returns what the host wants done. With no handler installed, or if a
+// fault is raised from inside the handler itself, it preserves the previous
+// behavior: write the diagnostic to stderr and ask to abort.
+static Slvs_FatalErrorAction Slvs_HandoffToHost(const char *message) {
+    if(!g_fatalErrorHandler || g_inFatalErrorHandler) {
+        fprintf(stderr, "%s", message);
+        return SLVS_FATAL_ABORT;
+    }
+
+    g_inFatalErrorHandler = true;
+    Slvs_FatalErrorAction action =
+        g_fatalErrorHandler(message, g_fatalErrorContext);
+    g_inFatalErrorHandler = false;
+    return action;
+}
+
 void Platform::FatalError(const std::string &message) {
-    fprintf(stderr, "%s", message.c_str());
+    Slvs_HandoffToHost(message.c_str());
     abort();
 }
 
@@ -30,6 +54,11 @@ static System SYS;
 static ParamSet dragged;
 
 extern "C" {
+
+void Slvs_SetFatalErrorHandler(Slvs_FatalErrorHandler handler, void *context) {
+    g_fatalErrorHandler = handler;
+    g_fatalErrorContext = context;
+}
 
 static ConstraintBase::Type Slvs_CTypeToConstraintBaseType(int type) {
     switch(type) {

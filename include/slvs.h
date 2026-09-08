@@ -509,6 +509,39 @@ DLL void Slvs_MarkDragged(Slvs_Entity ptA);
 DLL Slvs_SolveResult Slvs_SolveSketch(uint32_t hg, Slvs_hConstraint **bad);
 DLL void Slvs_ClearSketch();
 
+/* ---- Fatal error handoff -------------------------------------------
+ *
+ * The library terminates the process when it reaches a condition it cannot
+ * continue from. An embedding application can install a handler so that it
+ * is consulted at that moment, and can record the diagnostic or save the
+ * user's work before anything ends.
+ *
+ * With no handler installed behavior is unchanged: the message goes to
+ * stderr and the process aborts. With one installed the message is handed
+ * to the host instead, because where a diagnostic belongs is a decision
+ * only the host can make.
+ *
+ * The handler runs while the library is in an unusable state. Do the
+ * minimum, and do not assume anything about library state.
+ */
+#define SLVS_HAS_FATAL_ERROR_HANDLER 1
+
+typedef enum {
+    /* Terminate, exactly as with no handler installed. */
+    SLVS_FATAL_ABORT        = 0,
+    /* Unwind to the nearest entry point and report to the caller. */
+    SLVS_FATAL_RETURN_ERROR = 1
+} Slvs_FatalErrorAction;
+
+typedef Slvs_FatalErrorAction (*Slvs_FatalErrorHandler)(
+        const char *message, void *context);
+
+/* Install a handler. NULL restores the default.
+ * The pointer is global state: install once during startup, before any
+ * solving begins, and do not swap it while a solve is running. */
+DLL void Slvs_SetFatalErrorHandler(Slvs_FatalErrorHandler handler,
+                                   void *context);
+
 #ifdef __cplusplus
 }
 #endif

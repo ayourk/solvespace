@@ -274,6 +274,7 @@ bool EntityBase::IsPoint() const {
         case Type::POINT_N_ROT_AXIS_TRANS:
         case Type::POINT_N_TRANSFORM:
         case Type::POINT_N_TRANSFORM_ROT:
+        case Type::POINT_N_TRANSFORM_SCALE:
             return true;
 
         default:
@@ -538,6 +539,17 @@ void EntityBase::PointForceTo(Vector p) {
             break;
         }
 
+        case Type::POINT_N_TRANSFORM_SCALE: {
+            // [HobbyCAD] force the translation, holding the scale.
+            double sc = SK.GetParam(param[3])->val;
+            Vector src = SK.GetEntity(point[0])->PointGetNum().ScaledBy(sc);
+            Vector trans = p.Minus(src);
+            SK.GetParam(param[0])->val = trans.x;
+            SK.GetParam(param[1])->val = trans.y;
+            SK.GetParam(param[2])->val = trans.z;
+            break;
+        }
+
         case Type::POINT_N_COPY:
             // Nothing to do; it's a static copy
             break;
@@ -617,6 +629,19 @@ Vector EntityBase::PointGetNum() const {
                                         SK.GetParam(param[1])->val,
                                         SK.GetParam(param[2])->val);
             p = rot.Plus(trans);
+            break;
+        }
+
+        case Type::POINT_N_TRANSFORM_SCALE: {
+            // [HobbyCAD] live source scaled uniformly about the origin by a free
+            // factor param[3], then translated. The improvement over the rigid,
+            // numeric-snapshot base transforms.
+            double sc = SK.GetParam(param[3])->val;
+            Vector src = SK.GetEntity(point[0])->PointGetNum().ScaledBy(sc);
+            Vector trans = Vector::From(SK.GetParam(param[0])->val,
+                                        SK.GetParam(param[1])->val,
+                                        SK.GetParam(param[2])->val);
+            p = src.Plus(trans);
             break;
         }
 
@@ -706,6 +731,16 @@ ExprVector EntityBase::PointGetExprs() const {
                 src.z);
             ExprVector trans = ExprVector::From(param[0], param[1], param[2]);
             r = rot.Plus(trans);
+            break;
+        }
+
+        case Type::POINT_N_TRANSFORM_SCALE: {
+            // [HobbyCAD] live source scaled about origin by free factor param[3],
+            // then translated by param[0..2].
+            ExprVector src = SK.GetEntity(point[0])->PointGetExprs()
+                               .ScaledBy(Expr::From(param[3]));
+            ExprVector trans = ExprVector::From(param[0], param[1], param[2]);
+            r = src.Plus(trans);
             break;
         }
 

@@ -81,6 +81,7 @@ bool ConstraintBase::IsProjectible() const {
         case Type::CURVATURE_CONTINUOUS:
         case Type::PT_ON_CUBIC:
         case Type::CURVATURE:
+        case Type::PT_ON_RATIONAL_CUBIC:
             return false;
     }
     ssassert(false, "Impossible");
@@ -220,7 +221,7 @@ void ConstraintBase::ModifyToSatisfy() {
         ExprVector exb = eb->PointGetExprsInWorkplane(workplane);
         ExprVector exba = exb.Minus(exa);
         SK.GetParam(valP)->val = exba.Dot(exp.Minus(exa))->Eval() / exba.Dot(exba)->Eval();
-    } else if(type == Type::PT_ON_CUBIC) {
+    } else if(type == Type::PT_ON_CUBIC || type == Type::PT_ON_RATIONAL_CUBIC) {
         // [HobbyCAD] Initial curve parameter t: project the point onto the
         // control chord P0->P3 (cheap, good enough to start Newton).
         EntityBase *cub = SK.GetEntity(entityA);
@@ -275,6 +276,7 @@ void ConstraintBase::Generate(ParamList *l) {
             // fallthrough
         case Type::SAME_ORIENTATION:
         case Type::PT_ON_CUBIC:
+        case Type::PT_ON_RATIONAL_CUBIC:
         case Type::PT_ON_LINE: {
             Param p = {};
             valP = h.param(0);
@@ -714,6 +716,36 @@ void ConstraintBase::GenerateEquations(IdList<Equation,hEquation> *l,
                              .Plus(p3.ScaledBy(b3));
             ExprVector ep = SK.GetEntity(ptA)->PointGetExprsInWorkplane(workplane);
             AddEq(l, C.Minus(ep));
+            return;
+        }
+
+        case Type::PT_ON_RATIONAL_CUBIC: {
+            // [HobbyCAD 0014] Point on a rational cubic Bezier: P = C(t) with
+            // C(t) = sum_i w_i b_i(t) P_i / sum_i w_i b_i(t); weights w_i are the
+            // entity's params, b the cubic Bernstein basis, t = valP. Written
+            // division-free per component: num - den*P = 0 (den>0 for w_i>0).
+            EntityBase *cub = SK.GetEntity(entityA);
+            ExprVector p0 = SK.GetEntity(cub->point[0])->PointGetExprsInWorkplane(workplane);
+            ExprVector p1 = SK.GetEntity(cub->point[1])->PointGetExprsInWorkplane(workplane);
+            ExprVector p2 = SK.GetEntity(cub->point[2])->PointGetExprsInWorkplane(workplane);
+            ExprVector p3 = SK.GetEntity(cub->point[3])->PointGetExprsInWorkplane(workplane);
+            Expr *w0 = Expr::From(cub->param[0]);
+            Expr *w1 = Expr::From(cub->param[1]);
+            Expr *w2 = Expr::From(cub->param[2]);
+            Expr *w3 = Expr::From(cub->param[3]);
+            Expr *t  = Expr::From(valP);
+            Expr *u  = Expr::From(1.0)->Minus(t);
+            Expr *b0 = u->Times(u)->Times(u);
+            Expr *b1 = Expr::From(3.0)->Times(u)->Times(u)->Times(t);
+            Expr *b2 = Expr::From(3.0)->Times(u)->Times(t)->Times(t);
+            Expr *b3 = t->Times(t)->Times(t);
+            Expr *wb0 = w0->Times(b0), *wb1 = w1->Times(b1), *wb2 = w2->Times(b2), *wb3 = w3->Times(b3);
+            Expr *den = wb0->Plus(wb1)->Plus(wb2)->Plus(wb3);
+            ExprVector num = p0.ScaledBy(wb0).Plus(p1.ScaledBy(wb1))
+                               .Plus(p2.ScaledBy(wb2)).Plus(p3.ScaledBy(wb3));
+            ExprVector ep = SK.GetEntity(ptA)->PointGetExprsInWorkplane(workplane);
+            AddEq(l, num.x->Minus(ep.x->Times(den)), 0);
+            AddEq(l, num.y->Minus(ep.y->Times(den)), 1);
             return;
         }
 

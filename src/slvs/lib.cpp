@@ -85,6 +85,7 @@ case SLVS_C_PT_IN_PLANE:         return ConstraintBase::Type::PT_IN_PLANE;
 case SLVS_C_PT_ON_LINE:          return ConstraintBase::Type::PT_ON_LINE;
 case SLVS_C_PT_ON_CUBIC:         return ConstraintBase::Type::PT_ON_CUBIC;
 case SLVS_C_CURVATURE:           return ConstraintBase::Type::CURVATURE;
+case SLVS_C_PT_ON_RATIONAL_CUBIC: return ConstraintBase::Type::PT_ON_RATIONAL_CUBIC;
 case SLVS_C_PT_ON_FACE:          return ConstraintBase::Type::PT_ON_FACE;
 case SLVS_C_EQUAL_LENGTH_LINES:  return ConstraintBase::Type::EQUAL_LENGTH_LINES;
 case SLVS_C_LENGTH_RATIO:        return ConstraintBase::Type::LENGTH_RATIO;
@@ -133,6 +134,7 @@ case SLVS_E_LINE_SEGMENT:       return EntityBase::Type::LINE_SEGMENT;
 case SLVS_E_CUBIC:              return EntityBase::Type::CUBIC;
 case SLVS_E_CIRCLE:             return EntityBase::Type::CIRCLE;
 case SLVS_E_ARC_OF_CIRCLE:      return EntityBase::Type::ARC_OF_CIRCLE;
+case SLVS_E_RATIONAL_CUBIC:     return EntityBase::Type::RATIONAL_CUBIC;
 default: Platform::FatalError("bad entity type " + std::to_string(type));
     }
 }
@@ -182,6 +184,7 @@ static bool Slvs_CanInitiallySatisfy(const ConstraintBase &c) {
     case ConstraintBase::Type::POINTS_COINCIDENT:
     case ConstraintBase::Type::PT_ON_LINE:
     case ConstraintBase::Type::PT_ON_CUBIC:
+    case ConstraintBase::Type::PT_ON_RATIONAL_CUBIC:
     case ConstraintBase::Type::SYMMETRIC:
     case ConstraintBase::Type::SYMMETRIC_HORIZ:
     case ConstraintBase::Type::SYMMETRIC_VERT:
@@ -465,6 +468,33 @@ Slvs_Entity Slvs_AddCubic(uint32_t grouph, Slvs_Entity ptA, Slvs_Entity ptB, Slv
     ce.point[1] = ptB.h;
     ce.point[2] = ptC.h;
     ce.point[3] = ptD.h;
+    return ce;
+}
+
+Slvs_Entity Slvs_AddRationalCubic(uint32_t grouph, Slvs_Entity ptA, Slvs_Entity ptB, Slvs_Entity ptC, Slvs_Entity ptD, double w0, double w1, double w2, double w3, Slvs_Entity workplane) {
+    if(!Slvs_IsWorkplane(workplane)) {
+        Platform::FatalError("workplane argument is not a workplane");
+    } else if(!Slvs_IsPoint2D(ptA)) { Platform::FatalError("ptA argument is not a 2d point");
+    } else if(!Slvs_IsPoint2D(ptB)) { Platform::FatalError("ptB argument is not a 2d point");
+    } else if(!Slvs_IsPoint2D(ptC)) { Platform::FatalError("ptC argument is not a 2d point");
+    } else if(!Slvs_IsPoint2D(ptD)) { Platform::FatalError("ptD argument is not a 2d point"); }
+    Slvs_hParam w0h = Slvs_AddParam(w0);
+    Slvs_hParam w1h = Slvs_AddParam(w1);
+    Slvs_hParam w2h = Slvs_AddParam(w2);
+    Slvs_hParam w3h = Slvs_AddParam(w3);
+    EntityBase e  = {};
+    e.type        = EntityBase::Type::RATIONAL_CUBIC;
+    e.group.v     = grouph;
+    e.workplane.v = workplane.h;
+    e.point[0].v  = ptA.h; e.point[1].v = ptB.h; e.point[2].v = ptC.h; e.point[3].v = ptD.h;
+    e.param[0].v  = w0h; e.param[1].v = w1h; e.param[2].v = w2h; e.param[3].v = w3h;
+    SK.entity.AddAndAssignId(&e);
+
+    Slvs_Entity ce = Slvs_Entity {};
+    ce.h = e.h.v; ce.type = SLVS_E_RATIONAL_CUBIC;
+    ce.group = grouph; ce.wrkpl = workplane.h;
+    ce.point[0]=ptA.h; ce.point[1]=ptB.h; ce.point[2]=ptC.h; ce.point[3]=ptD.h;
+    ce.param[0]=w0h; ce.param[1]=w1h; ce.param[2]=w2h; ce.param[3]=w3h;
     return ce;
 }
 

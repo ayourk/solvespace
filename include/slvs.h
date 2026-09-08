@@ -41,6 +41,8 @@
 #define SLVS_HAS_CURVATURE_ARC 1
 /* [HobbyCAD] SLVS_C_CURVATURE: dimension signed curvature at a cubic end. */
 #define SLVS_HAS_CURVATURE_DIM 1
+/* [HobbyCAD] SLVS_E_RATIONAL_CUBIC + SLVS_C_PT_ON_RATIONAL_CUBIC (weighted). */
+#define SLVS_HAS_RATIONAL_CUBIC 1
 
 #if defined(WIN32) && !defined(STATIC_LIB)
 #   ifdef EXPORT_DLL
@@ -97,6 +99,7 @@ typedef struct {
 #define SLVS_E_CUBIC                80002
 #define SLVS_E_CIRCLE               80003
 #define SLVS_E_ARC_OF_CIRCLE        80004
+#define SLVS_E_RATIONAL_CUBIC       80005  /* [HobbyCAD] rational cubic Bezier */
 
 typedef struct {
     Slvs_hEntity    h;
@@ -148,6 +151,7 @@ typedef struct {
 #define SLVS_C_CURVATURE_CONTINUOUS     100038  /* [HobbyCAD G2] */
 #define SLVS_C_PT_ON_CUBIC              100039  /* [HobbyCAD] point on cubic */
 #define SLVS_C_CURVATURE                100040  /* [HobbyCAD] curvature dimension */
+#define SLVS_C_PT_ON_RATIONAL_CUBIC     100041  /* [HobbyCAD] point on rational cubic */
 #define SLVS_C_LENGTH_DIFFERENCE        100033
 #define SLVS_C_ARC_ARC_LEN_RATIO        100034
 #define SLVS_C_ARC_LINE_LEN_RATIO       100035
@@ -399,6 +403,26 @@ static inline Slvs_Entity Slvs_MakeCubic(Slvs_hEntity h, Slvs_hGroup group,
     r.point[3] = pt3;
     return r;
 }
+
+/* [HobbyCAD] array-path maker for a rational cubic: 4 control-point handles +
+ * 4 weight PARAM handles (the caller adds the weight params to the system). */
+static inline Slvs_Entity Slvs_MakeRationalCubic(Slvs_hEntity h, Slvs_hGroup group,
+                                         Slvs_hEntity wrkpl,
+                                         Slvs_hEntity pt0, Slvs_hEntity pt1,
+                                         Slvs_hEntity pt2, Slvs_hEntity pt3,
+                                         Slvs_hParam w0, Slvs_hParam w1,
+                                         Slvs_hParam w2, Slvs_hParam w3)
+{
+    Slvs_Entity r;
+    memset(&r, 0, sizeof(r));
+    r.h = h;
+    r.group = group;
+    r.type = SLVS_E_RATIONAL_CUBIC;
+    r.wrkpl = wrkpl;
+    r.point[0] = pt0; r.point[1] = pt1; r.point[2] = pt2; r.point[3] = pt3;
+    r.param[0] = w0;  r.param[1] = w1;  r.param[2] = w2;  r.param[3] = w3;
+    return r;
+}
 static inline Slvs_Entity Slvs_MakeArcOfCircle(Slvs_hEntity h, Slvs_hGroup group,
                                                Slvs_hEntity wrkpl,
                                                Slvs_hEntity normal,
@@ -499,6 +523,8 @@ DLL Slvs_Entity Slvs_AddDistance(uint32_t grouph, double value, Slvs_Entity work
 DLL Slvs_Entity Slvs_AddLine2D(uint32_t grouph, Slvs_Entity ptA, Slvs_Entity ptB, Slvs_Entity workplane);
 DLL Slvs_Entity Slvs_AddLine3D(uint32_t grouph, Slvs_Entity ptA, Slvs_Entity ptB);
 DLL Slvs_Entity Slvs_AddCubic(uint32_t grouph, Slvs_Entity ptA, Slvs_Entity ptB, Slvs_Entity ptC, Slvs_Entity ptD, Slvs_Entity workplane);
+/* [HobbyCAD] rational cubic: 4 control points + 4 weights. */
+DLL Slvs_Entity Slvs_AddRationalCubic(uint32_t grouph, Slvs_Entity ptA, Slvs_Entity ptB, Slvs_Entity ptC, Slvs_Entity ptD, double w0, double w1, double w2, double w3, Slvs_Entity workplane);
 DLL Slvs_Entity Slvs_AddArc(uint32_t grouph, Slvs_Entity normal, Slvs_Entity center, Slvs_Entity start, Slvs_Entity end, Slvs_Entity workplane);
 DLL Slvs_Entity Slvs_AddCircle(uint32_t grouph, Slvs_Entity normal, Slvs_Entity center, Slvs_Entity radius, Slvs_Entity workplane);
 DLL Slvs_Entity Slvs_AddWorkplane(uint32_t grouph, Slvs_Entity origin, Slvs_Entity nm);

@@ -449,6 +449,7 @@ public:
         LINE_SEGMENT           = 11000,
         CUBIC                  = 12000,
         CUBIC_PERIODIC         = 12001,
+        RATIONAL_CUBIC         = 12002,  // [HobbyCAD] weighted cubic Bezier
         CIRCLE                 = 13000,
         ARC_OF_CIRCLE          = 14000,
         TTF_TEXT               = 15000,
@@ -695,6 +696,7 @@ public:
         CURVATURE_CONTINUOUS   = 126,  // [HobbyCAD G2]
         PT_ON_CUBIC            = 127,  // [HobbyCAD]
         CURVATURE              = 128,  // [HobbyCAD] curvature dimension
+        PT_ON_RATIONAL_CUBIC   = 129,  // [HobbyCAD]
         EQUAL_RADIUS           = 130,
         WHERE_DRAGGED          = 200,
         ARC_ARC_LEN_RATIO      = 210,

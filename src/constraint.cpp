@@ -42,6 +42,7 @@ std::string Constraint::DescriptionString() const {
         case Type::ANGLE:               s = C_("constr-name", "angle"); break;
         case Type::PARALLEL:            s = C_("constr-name", "parallel"); break;
         case Type::ARC_LINE_TANGENT:    s = C_("constr-name", "arc-line-tangent"); break;
+        case Type::CIRCLE_LINE_TANGENT: s = C_("constr-name", "circle-line-tangent"); break;
         case Type::CUBIC_LINE_TANGENT:  s = C_("constr-name", "cubic-line-tangent"); break;
         case Type::CURVE_CURVE_TANGENT: s = C_("constr-name", "curve-curve-tangent"); break;
         case Type::CURVATURE_CONTINUOUS: s = C_("constr-name", "curvature-continuous"); break;
@@ -856,6 +857,21 @@ void Constraint::MenuConstrain(Command id) {
                 }
                 c.type = Type::ARC_LINE_TANGENT;
                 c.entityA = arc->h;
+                c.entityB = line->h;
+                newcons.push_back(c);
+            } else if(gs.lineSegments == 1 && gs.circlesOrArcs == 1 &&
+                      gs.arcs == 0 && gs.n == 2) {
+                // A full circle, not an arc: the branch above handles arcs
+                // and the two cannot both match. No end point is asked for
+                // here because a circle has none -- the tangency lands
+                // wherever the geometry puts it.
+                Entity *line   = SK.GetEntity(gs.entity[0]),
+                       *circle = SK.GetEntity(gs.entity[1]);
+                if(line->type == Entity::Type::CIRCLE) {
+                    swap(line, circle);
+                }
+                c.type = Type::CIRCLE_LINE_TANGENT;
+                c.entityA = circle->h;
                 c.entityB = line->h;
                 newcons.push_back(c);
             } else if(gs.lineSegments == 1 && gs.cubics == 1 &&

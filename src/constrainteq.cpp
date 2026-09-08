@@ -82,6 +82,7 @@ bool ConstraintBase::IsProjectible() const {
         case Type::CUBIC_LINE_TANGENT:
         case Type::CURVE_CURVE_TANGENT:
         case Type::ARC_LINE_TANGENT:
+        case Type::CIRCLE_LINE_TANGENT:
         case Type::EQUAL_RADIUS:
         case Type::CURVATURE_CONTINUOUS:
         case Type::PT_ON_CUBIC:
@@ -667,6 +668,16 @@ void ConstraintBase::GenerateEquations(IdList<Equation,hEquation> *l,
             EntityBase *circle = SK.GetEntity(entityA);
             Expr *r = circle->CircleGetRadiusExpr();
             AddEq(l, (r->Times(Expr::From(2)))->Minus(exA), 0);
+            return;
+        }
+
+        case Type::CIRCLE_LINE_TANGENT: {
+            // Circle/arc tangent to a line: distance from the center to the
+            // line equals the radius. Squared to avoid the sign. (issue #1492, @ruevs)
+            EntityBase *circle = SK.GetEntity(entityA);
+            Expr *radius = circle->CircleGetRadiusExpr();
+            Expr *d = PointLineDistance(workplane, circle->point[0], entityB);
+            AddEq(l, d->Square()->Minus(radius->Square()), 0);
             return;
         }
 

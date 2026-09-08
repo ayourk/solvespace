@@ -173,6 +173,7 @@ typedef struct {
 #define SLVS_C_ARC_MIDPOINT             100045  /* [HobbyCAD] point at an arc's midpoint */
 #define SLVS_C_PT_PT_DISTANCE_MIN       100046  /* [HobbyCAD] d >= valA (inequality via slack; from 0xSeren) */
 #define SLVS_C_PT_PT_DISTANCE_MAX       100047  /* [HobbyCAD] d <= valA (inequality via slack; from 0xSeren) */
+#define SLVS_C_CIRCLE_LINE_TANGENT      100048  /* [HobbyCAD] circle/arc tangent to a line; issue #1492 */
 #define SLVS_C_LENGTH_DIFFERENCE        100033
 #define SLVS_C_ARC_ARC_LEN_RATIO        100034
 #define SLVS_C_ARC_LINE_LEN_RATIO       100035

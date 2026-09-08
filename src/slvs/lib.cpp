@@ -118,6 +118,7 @@ case SLVS_C_ANGLE:               return ConstraintBase::Type::ANGLE;
 case SLVS_C_PARALLEL:            return ConstraintBase::Type::PARALLEL;
 case SLVS_C_PERPENDICULAR:       return ConstraintBase::Type::PERPENDICULAR;
 case SLVS_C_ARC_LINE_TANGENT:    return ConstraintBase::Type::ARC_LINE_TANGENT;
+case SLVS_C_CIRCLE_LINE_TANGENT: return ConstraintBase::Type::CIRCLE_LINE_TANGENT;
 case SLVS_C_CUBIC_LINE_TANGENT:  return ConstraintBase::Type::CUBIC_LINE_TANGENT;
 case SLVS_C_EQUAL_RADIUS:        return ConstraintBase::Type::EQUAL_RADIUS;
 case SLVS_C_PROJ_PT_DISTANCE:    return ConstraintBase::Type::PROJ_PT_DISTANCE;
@@ -186,6 +187,7 @@ static bool Slvs_CanInitiallySatisfy(const ConstraintBase &c) {
     case ConstraintBase::Type::ANGLE:
     case ConstraintBase::Type::EQUAL_ANGLE:
     case ConstraintBase::Type::ARC_LINE_TANGENT:
+    case ConstraintBase::Type::CIRCLE_LINE_TANGENT:
     case ConstraintBase::Type::CURVE_CURVE_TANGENT:
     case ConstraintBase::Type::CURVATURE_CONTINUOUS:
         return true;

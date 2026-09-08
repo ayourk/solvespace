@@ -698,6 +698,7 @@ public:
         CURVATURE              = 128,  // [HobbyCAD] curvature dimension
         PT_ON_RATIONAL_CUBIC   = 129,  // [HobbyCAD]
         EQUAL_RADIUS           = 130,
+        TANGENT_ANGLE          = 131,  // [HobbyCAD] directed tangent-angle dimension
         WHERE_DRAGGED          = 200,
         ARC_ARC_LEN_RATIO      = 210,
         ARC_LINE_LEN_RATIO     = 211,

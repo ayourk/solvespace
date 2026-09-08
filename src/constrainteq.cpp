@@ -27,6 +27,7 @@ bool ConstraintBase::HasLabel() const {
         case Type::ARC_LINE_DIFFERENCE:
         case Type::ANGLE:
         case Type::CURVATURE:
+        case Type::TANGENT_ANGLE:
         case Type::COMMENT:
             return true;
 
@@ -82,6 +83,7 @@ bool ConstraintBase::IsProjectible() const {
         case Type::PT_ON_CUBIC:
         case Type::CURVATURE:
         case Type::PT_ON_RATIONAL_CUBIC:
+        case Type::TANGENT_ANGLE:
             return false;
     }
     ssassert(false, "Impossible");
@@ -201,7 +203,21 @@ ExprVector ConstraintBase::PointInThreeSpace(hEntity workplane,
 }
 
 void ConstraintBase::ModifyToSatisfy() {
-    if(type == Type::ANGLE) {
+    if(type == Type::TANGENT_ANGLE) {
+        // [HobbyCAD 0015] Seed valA to the current directed tangent angle
+        // (degrees, 0-360) measured in the workplane from its U axis.
+        EntityBase *c = SK.GetEntity(entityA);
+        ExprVector Te = other ? c->CubicGetFinishTangentExprs()
+                              : c->CubicGetStartTangentExprs().ScaledBy(Expr::From(-1.0));
+        EntityBase *w = SK.GetEntity(workplane);
+        ExprVector U = w->Normal()->NormalExprsU();
+        ExprVector V = w->Normal()->NormalExprsV();
+        double tu = Te.Dot(U)->Eval();
+        double tv = Te.Dot(V)->Eval();
+        double a = atan2(tv, tu) * 180.0 / PI;
+        if(a < 0) a += 360.0;
+        valA = a;
+    } else if(type == Type::ANGLE) {
         Vector a = SK.GetEntity(entityA)->VectorGetNum();
         Vector b = SK.GetEntity(entityB)->VectorGetNum();
         if(other) a = a.ScaledBy(-1);
@@ -1152,6 +1168,30 @@ void ConstraintBase::GenerateEquations(IdList<Equation,hEquation> *l,
             ExprVector n = w->Normal()->NormalExprsN();
             Expr *k = ((T.Cross(S)).Dot(n))->Div(T.Dot(T)->Times(T.Magnitude()));
             AddEq(l, k->Minus(Expr::From(valA)), 0);
+            return;
+        }
+
+        case Type::TANGENT_ANGLE: {
+            // [HobbyCAD 0015] Dimension the DIRECTED tangent angle at a cubic
+            // end to valA (degrees, 0-360), measured in the workplane from its
+            // U axis. other picks finish(1)/start(0); T is the forward tangent
+            // (negate the start accessor). Periodic-safe: the target enters only
+            // as cos/sin CONSTANTS, so 0 and 360 are the same equation (no branch
+            // cut). One equation removes the in-plane direction DOF; the +/-180
+            // side is fixed by the seeded geometry.
+            EntityBase *c = SK.GetEntity(entityA);
+            ExprVector T = other ? c->CubicGetFinishTangentExprs()
+                                 : c->CubicGetStartTangentExprs().ScaledBy(Expr::From(-1.0));
+            EntityBase *w = SK.GetEntity(workplane);
+            ExprVector U = w->Normal()->NormalExprsU();
+            ExprVector V = w->Normal()->NormalExprsV();
+            Expr *tu = T.Dot(U);
+            Expr *tv = T.Dot(V);
+            double th = valA * PI / 180.0;
+            Expr *ct = Expr::From(cos(th));
+            Expr *st = Expr::From(sin(th));
+            // T x (cos,sin) = 0  <=>  tu*sin - tv*cos = 0 (parallel to target)
+            AddEq(l, tu->Times(st)->Minus(tv->Times(ct)), 0);
             return;
         }
 

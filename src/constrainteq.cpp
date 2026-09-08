@@ -28,6 +28,7 @@ bool ConstraintBase::HasLabel() const {
         case Type::ANGLE:
         case Type::CURVATURE:
         case Type::TANGENT_ANGLE:
+        case Type::CURVATURE_RATIONAL:
         case Type::TANGENT_ANGLE_RATIONAL:
         case Type::COMMENT:
             return true;
@@ -85,6 +86,7 @@ bool ConstraintBase::IsProjectible() const {
         case Type::CURVATURE:
         case Type::PT_ON_RATIONAL_CUBIC:
         case Type::TANGENT_ANGLE:
+        case Type::CURVATURE_RATIONAL:
         case Type::TANGENT_ANGLE_RATIONAL:
             return false;
     }
@@ -1197,6 +1199,61 @@ void ConstraintBase::GenerateEquations(IdList<Equation,hEquation> *l,
             EntityBase *w = SK.GetEntity(workplane);
             ExprVector n = w->Normal()->NormalExprsN();
             Expr *k = ((T.Cross(S)).Dot(n))->Div(T.Dot(T)->Times(T.Magnitude()));
+            AddEq(l, k->Minus(Expr::From(valA)), 0);
+            return;
+        }
+
+        case Type::CURVATURE_RATIONAL: {
+            // [HobbyCAD 0017] Dimension the signed curvature at a RATIONAL cubic
+            // Bezier end to valA, honoring the segment's weights (param[0..3]).
+            // A rational curve's endpoint curvature scales by w0*w2/w1^2 (start),
+            // so SLVS_C_CURVATURE's unweighted formula is wrong for a weighted
+            // segment. Write C(t) = N/D with N = sum wi bi Pi, D = sum wi bi (bi
+            // the cubic Bernstein basis). Build the derivatives division-free at
+            // the fixed end: A = N'D - N D' ( = D^2 C' ) and
+            // B = N'' D^2 - N D'' D - 2 D' A ( = D^3 C'' ). The signed planar
+            // curvature k = (C' x C'').n / |C'|^3 then reduces to
+            // k = D * (A x B).n / |A|^3, with no division by powers of D.
+            // other picks finish(1)/start(0). The forward parameter direction is
+            // built in (A is +C'), matching SLVS_C_CURVATURE's sign convention.
+            EntityBase *cub = SK.GetEntity(entityA);
+            ExprVector P[4];
+            Expr *wt[4];
+            for(int i = 0; i < 4; i++) {
+                P[i]  = SK.GetEntity(cub->point[i])->PointGetExprs();
+                wt[i] = Expr::From(cub->param[i]);
+            }
+            // Cubic Bernstein basis and its 1st/2nd derivatives at the end.
+            double bC[4], bP[4], bPP[4];
+            if(other) {   // t = 1 (finish)
+                double a[4]={0,0,0,1}, b[4]={0,0,-3,3}, c[4]={0,6,-12,6};
+                for(int i=0;i<4;i++){ bC[i]=a[i]; bP[i]=b[i]; bPP[i]=c[i]; }
+            } else {      // t = 0 (start)
+                double a[4]={1,0,0,0}, b[4]={-3,3,0,0}, c[4]={6,-12,6,0};
+                for(int i=0;i<4;i++){ bC[i]=a[i]; bP[i]=b[i]; bPP[i]=c[i]; }
+            }
+            ExprVector N   = P[0].ScaledBy(wt[0]->Times(Expr::From(bC[0])));
+            ExprVector Np  = P[0].ScaledBy(wt[0]->Times(Expr::From(bP[0])));
+            ExprVector Npp = P[0].ScaledBy(wt[0]->Times(Expr::From(bPP[0])));
+            Expr *D   = wt[0]->Times(Expr::From(bC[0]));
+            Expr *Dp  = wt[0]->Times(Expr::From(bP[0]));
+            Expr *Dpp = wt[0]->Times(Expr::From(bPP[0]));
+            for(int i = 1; i < 4; i++) {
+                N   = N.Plus(P[i].ScaledBy(wt[i]->Times(Expr::From(bC[i]))));
+                Np  = Np.Plus(P[i].ScaledBy(wt[i]->Times(Expr::From(bP[i]))));
+                Npp = Npp.Plus(P[i].ScaledBy(wt[i]->Times(Expr::From(bPP[i]))));
+                D   = D->Plus(wt[i]->Times(Expr::From(bC[i])));
+                Dp  = Dp->Plus(wt[i]->Times(Expr::From(bP[i])));
+                Dpp = Dpp->Plus(wt[i]->Times(Expr::From(bPP[i])));
+            }
+            ExprVector A = Np.ScaledBy(D).Minus(N.ScaledBy(Dp));                  // D^2 C'
+            ExprVector B = Npp.ScaledBy(D->Times(D))
+                              .Minus(N.ScaledBy(Dpp->Times(D)))
+                              .Minus(A.ScaledBy(Expr::From(2.0)->Times(Dp)));     // D^3 C''
+            EntityBase *w = SK.GetEntity(workplane);
+            ExprVector n = w->Normal()->NormalExprsN();
+            Expr *k = ((A.Cross(B)).Dot(n))->Times(D)
+                          ->Div(A.Dot(A)->Times(A.Magnitude()));
             AddEq(l, k->Minus(Expr::From(valA)), 0);
             return;
         }

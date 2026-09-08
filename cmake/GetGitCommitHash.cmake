@@ -3,6 +3,12 @@ function(get_git_commit_hash)
     get_filename_component(GIT_ROOT ${GIT_DESCRIBE_CMAKE_DIR} PATH)
     set(GIT_DIR "${GIT_ROOT}/.git")
 
+    if(NOT EXISTS ${GIT_DIR})
+        message(WARNING "No .git directory found, cannot determine git commit hash")
+        set(GIT_COMMIT_HASH "unknown" PARENT_SCOPE)
+        return()
+    endif()
+
     if(EXISTS ${GIT_DIR} AND NOT IS_DIRECTORY ${GIT_DIR})
         # In case we are included as a git submodule.
         file(READ ${GIT_DIR} GIT_SUB_DIR)

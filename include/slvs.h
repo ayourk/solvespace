@@ -45,6 +45,9 @@
 #define SLVS_HAS_RATIONAL_CUBIC 1
 /* [HobbyCAD] SLVS_C_TANGENT_ANGLE: directed 0-360 tangent-angle dimension. */
 #define SLVS_HAS_TANGENT_ANGLE 1
+/* [HobbyCAD 0016] SLVS_C_TANGENT_ANGLE_RATIONAL: directed tangent-angle at a
+ * RATIONAL cubic end (computed from the weighted forward tangent). */
+#define SLVS_HAS_TANGENT_ANGLE_RATIONAL 1
 
 #if defined(WIN32) && !defined(STATIC_LIB)
 #   ifdef EXPORT_DLL
@@ -155,6 +158,7 @@ typedef struct {
 #define SLVS_C_CURVATURE                100040  /* [HobbyCAD] curvature dimension */
 #define SLVS_C_PT_ON_RATIONAL_CUBIC     100041  /* [HobbyCAD] point on rational cubic */
 #define SLVS_C_TANGENT_ANGLE            100042  /* [HobbyCAD] directed tangent-angle dim */
+#define SLVS_C_TANGENT_ANGLE_RATIONAL   100044  /* [HobbyCAD] tangent-angle dim, rational cubic */
 #define SLVS_C_LENGTH_DIFFERENCE        100033
 #define SLVS_C_ARC_ARC_LEN_RATIO        100034
 #define SLVS_C_ARC_LINE_LEN_RATIO       100035

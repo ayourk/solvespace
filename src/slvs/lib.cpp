@@ -87,6 +87,7 @@ case SLVS_C_PT_ON_CUBIC:         return ConstraintBase::Type::PT_ON_CUBIC;
 case SLVS_C_CURVATURE:           return ConstraintBase::Type::CURVATURE;
 case SLVS_C_PT_ON_RATIONAL_CUBIC: return ConstraintBase::Type::PT_ON_RATIONAL_CUBIC;
 case SLVS_C_TANGENT_ANGLE:       return ConstraintBase::Type::TANGENT_ANGLE;
+case SLVS_C_TANGENT_ANGLE_RATIONAL: return ConstraintBase::Type::TANGENT_ANGLE_RATIONAL;
 case SLVS_C_PT_ON_FACE:          return ConstraintBase::Type::PT_ON_FACE;
 case SLVS_C_EQUAL_LENGTH_LINES:  return ConstraintBase::Type::EQUAL_LENGTH_LINES;
 case SLVS_C_LENGTH_RATIO:        return ConstraintBase::Type::LENGTH_RATIO;
@@ -164,6 +165,7 @@ static bool Slvs_CanInitiallySatisfy(const ConstraintBase &c) {
     case ConstraintBase::Type::DIAMETER:
     case ConstraintBase::Type::CURVATURE:
     case ConstraintBase::Type::TANGENT_ANGLE:
+    case ConstraintBase::Type::TANGENT_ANGLE_RATIONAL:
     case ConstraintBase::Type::EQUAL_RADIUS:
     case ConstraintBase::Type::EQUAL_LINE_ARC_LEN:
     case ConstraintBase::Type::PT_IN_PLANE:

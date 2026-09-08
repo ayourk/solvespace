@@ -28,6 +28,7 @@ bool ConstraintBase::HasLabel() const {
         case Type::ANGLE:
         case Type::CURVATURE:
         case Type::TANGENT_ANGLE:
+        case Type::TANGENT_ANGLE_RATIONAL:
         case Type::COMMENT:
             return true;
 
@@ -84,6 +85,7 @@ bool ConstraintBase::IsProjectible() const {
         case Type::CURVATURE:
         case Type::PT_ON_RATIONAL_CUBIC:
         case Type::TANGENT_ANGLE:
+        case Type::TANGENT_ANGLE_RATIONAL:
             return false;
     }
     ssassert(false, "Impossible");
@@ -215,6 +217,34 @@ void ConstraintBase::ModifyToSatisfy() {
         double tu = Te.Dot(U)->Eval();
         double tv = Te.Dot(V)->Eval();
         double a = atan2(tv, tu) * 180.0 / PI;
+        if(a < 0) a += 360.0;
+        valA = a;
+    } else if(type == Type::TANGENT_ANGLE_RATIONAL) {
+        // [HobbyCAD 0016] Seed valA to the current directed tangent angle of the
+        // rational cubic end (degrees 0-360), from the weighted forward tangent.
+        EntityBase *cub = SK.GetEntity(entityA);
+        Vector P[4]; double wv[4];
+        for(int i = 0; i < 4; i++) {
+            P[i]  = SK.GetEntity(cub->point[i])->PointGetNum();
+            wv[i] = SK.GetParam(cub->param[i])->val;
+        }
+        double bC[4], bP[4];
+        if(other) { double a[4]={0,0,0,1}, b[4]={0,0,-3,3};
+                    for(int i=0;i<4;i++){ bC[i]=a[i]; bP[i]=b[i]; } }
+        else      { double a[4]={1,0,0,0}, b[4]={-3,3,0,0};
+                    for(int i=0;i<4;i++){ bC[i]=a[i]; bP[i]=b[i]; } }
+        Vector N = Vector::From(0,0,0), Np = Vector::From(0,0,0);
+        double D = 0, Dp = 0;
+        for(int i = 0; i < 4; i++) {
+            N  = N.Plus(P[i].ScaledBy(wv[i]*bC[i]));
+            Np = Np.Plus(P[i].ScaledBy(wv[i]*bP[i]));
+            D  += wv[i]*bC[i];
+            Dp += wv[i]*bP[i];
+        }
+        Vector T = Np.ScaledBy(D).Minus(N.ScaledBy(Dp));   // forward tangent
+        EntityBase *w = SK.GetEntity(workplane);
+        Vector U = w->Normal()->NormalU(), V = w->Normal()->NormalV();
+        double a = atan2(T.Dot(V), T.Dot(U)) * 180.0 / PI;
         if(a < 0) a += 360.0;
         valA = a;
     } else if(type == Type::ANGLE) {
@@ -1192,6 +1222,47 @@ void ConstraintBase::GenerateEquations(IdList<Equation,hEquation> *l,
             Expr *st = Expr::From(sin(th));
             // T x (cos,sin) = 0  <=>  tu*sin - tv*cos = 0 (parallel to target)
             AddEq(l, tu->Times(st)->Minus(tv->Times(ct)), 0);
+            return;
+        }
+
+        case Type::TANGENT_ANGLE_RATIONAL: {
+            // [HobbyCAD 0016] Directed tangent angle at a RATIONAL cubic end,
+            // measured in the workplane from its U axis (valA, degrees 0-360),
+            // computed from the weighted forward tangent. NOTE the endpoint
+            // tangent DIRECTION of a rational Bezier is weight-INDEPENDENT
+            // (C'(0) = 3 (w1/w0)(P1-P0), a positive scalar times P1-P0), so this
+            // equals SLVS_C_TANGENT_ANGLE at the ends; it exists so the rational
+            // path is explicit and reads the rational entity's own data. Forward
+            // tangent A = N'D - N D' ( = D^2 C' ), N=sum wi bi Pi, D=sum wi bi.
+            // Periodic-safe: target enters only as cos/sin constants.
+            EntityBase *cub = SK.GetEntity(entityA);
+            ExprVector P[4]; Expr *wt[4];
+            for(int i = 0; i < 4; i++) {
+                P[i]  = SK.GetEntity(cub->point[i])->PointGetExprs();
+                wt[i] = Expr::From(cub->param[i]);
+            }
+            double bC[4], bP[4];
+            if(other) { double a[4]={0,0,0,1}, b[4]={0,0,-3,3};
+                        for(int i=0;i<4;i++){ bC[i]=a[i]; bP[i]=b[i]; } }
+            else      { double a[4]={1,0,0,0}, b[4]={-3,3,0,0};
+                        for(int i=0;i<4;i++){ bC[i]=a[i]; bP[i]=b[i]; } }
+            ExprVector N  = P[0].ScaledBy(wt[0]->Times(Expr::From(bC[0])));
+            ExprVector Np = P[0].ScaledBy(wt[0]->Times(Expr::From(bP[0])));
+            Expr *D  = wt[0]->Times(Expr::From(bC[0]));
+            Expr *Dp = wt[0]->Times(Expr::From(bP[0]));
+            for(int i = 1; i < 4; i++) {
+                N  = N.Plus(P[i].ScaledBy(wt[i]->Times(Expr::From(bC[i]))));
+                Np = Np.Plus(P[i].ScaledBy(wt[i]->Times(Expr::From(bP[i]))));
+                D  = D->Plus(wt[i]->Times(Expr::From(bC[i])));
+                Dp = Dp->Plus(wt[i]->Times(Expr::From(bP[i])));
+            }
+            ExprVector T = Np.ScaledBy(D).Minus(N.ScaledBy(Dp));   // forward tangent (D^2 C')
+            EntityBase *w = SK.GetEntity(workplane);
+            ExprVector U = w->Normal()->NormalExprsU();
+            ExprVector V = w->Normal()->NormalExprsV();
+            Expr *tu = T.Dot(U), *tv = T.Dot(V);
+            double th = valA * PI / 180.0;
+            AddEq(l, tu->Times(Expr::From(sin(th)))->Minus(tv->Times(Expr::From(cos(th)))), 0);
             return;
         }
 

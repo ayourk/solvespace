@@ -37,6 +37,8 @@
 #define SLVS_HAS_CURVATURE 1
 /* [HobbyCAD] SLVS_C_PT_ON_CUBIC: constrain a point onto a cubic Bezier. */
 #define SLVS_HAS_PT_ON_CUBIC 1
+/* [HobbyCAD] CURVATURE_CONTINUOUS also accepts an arc on either side. */
+#define SLVS_HAS_CURVATURE_ARC 1
 
 #if defined(WIN32) && !defined(STATIC_LIB)
 #   ifdef EXPORT_DLL

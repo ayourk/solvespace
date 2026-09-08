@@ -1064,17 +1064,37 @@ void ConstraintBase::GenerateEquations(IdList<Equation,hEquation> *l,
             // even under reversal, so it is not negated). Cross-multiply by the
             // |T|^3 terms to avoid division:
             //   (Ta x Sa).n * |Tb|^3  -  (Tb x Sb).n * |Ta|^3 = 0.
-            EntityBase *ca = SK.GetEntity(entityA), *cb = SK.GetEntity(entityB);
-            ExprVector Ta = other  ? ca->CubicGetFinishTangentExprs()
-                                   : ca->CubicGetStartTangentExprs().ScaledBy(Expr::From(-1.0));
-            ExprVector Sa = other  ? ca->CubicGetFinishSecondDerivExprs()
-                                   : ca->CubicGetStartSecondDerivExprs();
-            ExprVector Tb = other2 ? cb->CubicGetFinishTangentExprs()
-                                   : cb->CubicGetStartTangentExprs().ScaledBy(Expr::From(-1.0));
-            ExprVector Sb = other2 ? cb->CubicGetFinishSecondDerivExprs()
-                                   : cb->CubicGetStartSecondDerivExprs();
+            // [HobbyCAD 0012] Either side may be a cubic OR an arc. Each side
+            // yields a first-derivative T and second-derivative S; the signed
+            // planar curvature is (T x S).n / |T|^3 regardless of the curve's
+            // parameterization speed, so the SAME formula serves both. For an
+            // arc parameterized by angle theta about center C with endpoint E:
+            //   T = dP/dtheta = n x (E - C)   (forward/CCW tangent)
+            //   S = d2P/dtheta2 = C - E       (toward the center)
+            // which gives (T x S).n / |T|^3 = +-1/r with the geometric sign.
+            // Orient each side's T into a consistent flow (negate the start
+            // role, cubic and arc alike); S is even under reversal, not negated.
             EntityBase *w = SK.GetEntity(workplane);
             ExprVector n = w->Normal()->NormalExprsN();
+            auto sideTS = [&](EntityBase *e, bool fin, ExprVector *T, ExprVector *S){
+                if(e->type == EntityBase::Type::ARC_OF_CIRCLE) {
+                    ExprVector C = SK.GetEntity(e->point[0])->PointGetExprs();
+                    ExprVector E = SK.GetEntity(e->point[fin ? 2 : 1])->PointGetExprs();
+                    ExprVector Tv = n.Cross(E.Minus(C));
+                    if(!fin) Tv = Tv.ScaledBy(Expr::From(-1.0));
+                    *T = Tv;
+                    *S = C.Minus(E);
+                } else {
+                    *T = fin ? e->CubicGetFinishTangentExprs()
+                             : e->CubicGetStartTangentExprs().ScaledBy(Expr::From(-1.0));
+                    *S = fin ? e->CubicGetFinishSecondDerivExprs()
+                             : e->CubicGetStartSecondDerivExprs();
+                }
+            };
+            EntityBase *ea = SK.GetEntity(entityA), *eb = SK.GetEntity(entityB);
+            ExprVector Ta, Sa, Tb, Sb;
+            sideTS(ea, other,  &Ta, &Sa);
+            sideTS(eb, other2, &Tb, &Sb);
             Expr *ka = (Ta.Cross(Sa)).Dot(n);
             Expr *kb = (Tb.Cross(Sb)).Dot(n);
             Expr *ma3 = Ta.Dot(Ta)->Times(Ta.Magnitude());   // |Ta|^3

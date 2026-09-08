@@ -702,6 +702,8 @@ public:
         CURVATURE_RATIONAL     = 132,  // [HobbyCAD] curvature dim on a rational cubic
         TANGENT_ANGLE_RATIONAL = 133,  // [HobbyCAD] tangent-angle dim on a rational cubic
         ARC_MIDPOINT           = 134,  // [HobbyCAD] point at an arc's midpoint
+        PT_PT_DISTANCE_MIN     = 140,  // [HobbyCAD] d >= valA (inequality via slack; from 0xSeren PR)
+        PT_PT_DISTANCE_MAX     = 141,  // [HobbyCAD] d <= valA (inequality via slack; from 0xSeren PR)
         WHERE_DRAGGED          = 200,
         ARC_ARC_LEN_RATIO      = 210,
         ARC_LINE_LEN_RATIO     = 211,

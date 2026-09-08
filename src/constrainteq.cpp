@@ -42,6 +42,8 @@ bool ConstraintBase::IsProjectible() const {
     switch(type) {
         case Type::POINTS_COINCIDENT:
         case Type::PT_PT_DISTANCE:
+        case Type::PT_PT_DISTANCE_MIN:
+        case Type::PT_PT_DISTANCE_MAX:
         case Type::PT_LINE_DISTANCE:
         case Type::PT_ON_LINE:
         case Type::EQUAL_LENGTH_LINES:
@@ -334,6 +336,22 @@ void ConstraintBase::Generate(ParamList *l) {
             break;
         }
 
+        case Type::PT_PT_DISTANCE_MIN:
+        case Type::PT_PT_DISTANCE_MAX: {
+            // Inequality via a squared slack variable (0xSeren): valP is the
+            // slack, and the equation holds d - valA - slack^2 = 0 (min) or
+            // valA - d - slack^2 = 0 (max). Seed the slack so the constraint
+            // starts satisfied at the current distance.
+            Param p = {};
+            valP = h.param(0);
+            p.h = valP;
+            double d = Distance(workplane, ptA, ptB)->Eval();
+            double diff = (type == Type::PT_PT_DISTANCE_MIN) ? (d - valA) : (valA - d);
+            p.val = (diff > 0) ? sqrt(diff) : 0.1;
+            l->Add(&p);
+            break;
+        }
+
         default:
             break;
     }
@@ -348,6 +366,20 @@ void ConstraintBase::GenerateEquations(IdList<Equation,hEquation> *l,
         case Type::PT_PT_DISTANCE:
             AddEq(l, Distance(workplane, ptA, ptB)->Minus(exA), 0);
             return;
+
+        case Type::PT_PT_DISTANCE_MIN: {
+            // d >= valA:  d - valA - slack^2 = 0   (0xSeren)
+            Expr *slack = Expr::From(valP);
+            AddEq(l, Distance(workplane, ptA, ptB)->Minus(exA)->Minus(slack->Square()), 0);
+            return;
+        }
+
+        case Type::PT_PT_DISTANCE_MAX: {
+            // d <= valA:  valA - d - slack^2 = 0   (0xSeren)
+            Expr *slack = Expr::From(valP);
+            AddEq(l, exA->Minus(Distance(workplane, ptA, ptB))->Minus(slack->Square()), 0);
+            return;
+        }
 
         case Type::PROJ_PT_DISTANCE: {
             ExprVector pA = SK.GetEntity(ptA)->PointGetExprs(),

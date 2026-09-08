@@ -78,6 +78,8 @@ static ConstraintBase::Type Slvs_CTypeToConstraintBaseType(int type) {
     switch(type) {
 case SLVS_C_POINTS_COINCIDENT:   return ConstraintBase::Type::POINTS_COINCIDENT;
 case SLVS_C_PT_PT_DISTANCE:      return ConstraintBase::Type::PT_PT_DISTANCE;
+case SLVS_C_PT_PT_DISTANCE_MIN:  return ConstraintBase::Type::PT_PT_DISTANCE_MIN;
+case SLVS_C_PT_PT_DISTANCE_MAX:  return ConstraintBase::Type::PT_PT_DISTANCE_MAX;
 case SLVS_C_PT_PLANE_DISTANCE:   return ConstraintBase::Type::PT_PLANE_DISTANCE;
 case SLVS_C_PT_LINE_DISTANCE:    return ConstraintBase::Type::PT_LINE_DISTANCE;
 case SLVS_C_PT_FACE_DISTANCE:    return ConstraintBase::Type::PT_FACE_DISTANCE;
@@ -151,6 +153,10 @@ static bool Slvs_CanInitiallySatisfy(const ConstraintBase &c) {
         return c.workplane != EntityBase::FREE_IN_3D;
 
     case ConstraintBase::Type::PT_PT_DISTANCE:
+    // [HobbyCAD] MIN/MAX are NOT auto-satisfied on creation: the C-API caller
+    // supplies an explicit bound, so ModifyToSatisfy must not overwrite valA
+    // with the current distance. The slack (seeded in Generate) starts them
+    // reasonably and the solve enforces the bound.
     case ConstraintBase::Type::PROJ_PT_DISTANCE:
     case ConstraintBase::Type::PT_LINE_DISTANCE:
     case ConstraintBase::Type::PT_PLANE_DISTANCE:
@@ -193,6 +199,8 @@ static bool Slvs_CanInitiallySatisfy(const ConstraintBase &c) {
     case ConstraintBase::Type::PT_ON_LINE:
     case ConstraintBase::Type::PT_ON_CUBIC:
     case ConstraintBase::Type::PT_ON_RATIONAL_CUBIC:
+    case ConstraintBase::Type::PT_PT_DISTANCE_MIN:
+    case ConstraintBase::Type::PT_PT_DISTANCE_MAX:
     case ConstraintBase::Type::SYMMETRIC:
     case ConstraintBase::Type::SYMMETRIC_HORIZ:
     case ConstraintBase::Type::SYMMETRIC_VERT:

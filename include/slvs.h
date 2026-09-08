@@ -171,6 +171,8 @@ typedef struct {
 #define SLVS_C_CURVATURE_RATIONAL       100043  /* [HobbyCAD] curvature dim, rational cubic */
 #define SLVS_C_TANGENT_ANGLE_RATIONAL   100044  /* [HobbyCAD] tangent-angle dim, rational cubic */
 #define SLVS_C_ARC_MIDPOINT             100045  /* [HobbyCAD] point at an arc's midpoint */
+#define SLVS_C_PT_PT_DISTANCE_MIN       100046  /* [HobbyCAD] d >= valA (inequality via slack; from 0xSeren) */
+#define SLVS_C_PT_PT_DISTANCE_MAX       100047  /* [HobbyCAD] d <= valA (inequality via slack; from 0xSeren) */
 #define SLVS_C_LENGTH_DIFFERENCE        100033
 #define SLVS_C_ARC_ARC_LEN_RATIO        100034
 #define SLVS_C_ARC_LINE_LEN_RATIO       100035

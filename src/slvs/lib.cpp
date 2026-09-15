@@ -201,8 +201,13 @@ static bool Slvs_CanInitiallySatisfy(const ConstraintBase &c) {
         // Can initially satisfy if between a line segment and a workplane
         return c.ptA == EntityBase::NO_ENTITY;
 
-    case ConstraintBase::Type::POINTS_COINCIDENT:
     case ConstraintBase::Type::PT_ON_LINE:
+        // The parametric form carries t; ModifyToSatisfy projects the point
+        // onto the line, otherwise t starts at 0 and a satisfied constraint
+        // still moves the geometry on every solve (upstream #1775).
+        return true;
+
+    case ConstraintBase::Type::POINTS_COINCIDENT:
     case ConstraintBase::Type::PT_ON_CUBIC:
     case ConstraintBase::Type::PT_ON_RATIONAL_CUBIC:
     case ConstraintBase::Type::PT_PT_DISTANCE_MIN:
@@ -1149,11 +1154,10 @@ Slvs_SolveResult Slvs_SolveSketch(uint32_t shg, Slvs_hConstraint **bad = nullptr
         // This generates at most a single additional param
         c->Generate(&SK.param);
         if(c->valP.v) {
-            SYS.param.Add(SK.GetParam(c->valP));
-
             if(Slvs_CanInitiallySatisfy(*c)) {
                 c->ModifyToSatisfy();
             }
+            SYS.param.Add(SK.GetParam(c->valP));
         }
     }
 
@@ -1339,13 +1343,15 @@ void Slvs_Solve(Slvs_System *ssys, uint32_t shg)
             for(Param &p : params) {
                 p.h = SK.param.AddAndAssignId(&p);
                 c.valP = p.h;
-                SYS.param.Add(&p);
             }
             params.Clear();
 
+            // ModifyToSatisfy writes the sketch copy; the solver works on its
+            // own copy, so add that one afterwards (upstream #1775).
             if(Slvs_CanInitiallySatisfy(c)) {
                 c.ModifyToSatisfy();
             }
+            SYS.param.Add(SK.GetParam(c.valP));
         }
 
         SK.constraint.Add(&c);

@@ -272,7 +272,8 @@ void ConstraintBase::ModifyToSatisfy() {
         ExprVector exa = ea->PointGetExprsInWorkplane(workplane);
         ExprVector exb = eb->PointGetExprsInWorkplane(workplane);
         ExprVector exba = exb.Minus(exa);
-        SK.GetParam(valP)->val = exba.Dot(exp.Minus(exa))->Eval() / exba.Dot(exba)->Eval();
+        double denom = exba.Dot(exba)->Eval();
+        SK.GetParam(valP)->val = (denom > 1e-12) ? exba.Dot(exp.Minus(exa))->Eval() / denom : 0.0;
     } else if(type == Type::PT_ON_CUBIC || type == Type::PT_ON_RATIONAL_CUBIC) {
         // [HobbyCAD] Initial curve parameter t: project the point onto the
         // control chord P0->P3 (cheap, good enough to start Newton).

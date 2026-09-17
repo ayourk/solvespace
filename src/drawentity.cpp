@@ -88,6 +88,10 @@ void Entity::GetReferencePoints(std::vector<Vector> *refs) {
         case Type::POINT_N_ROT_TRANS:
         case Type::POINT_N_ROT_AA:
         case Type::POINT_N_ROT_AXIS_TRANS:
+        case Type::POINT_N_TRANSFORM:
+        case Type::POINT_N_TRANSFORM_ROT:
+        case Type::POINT_N_TRANSFORM_SCALE:
+        case Type::POINT_N_TRANSFORM_ROT3D:
         case Type::POINT_IN_3D:
         case Type::POINT_IN_2D:
             refs->push_back(PointGetDrawNum());
@@ -103,6 +107,8 @@ void Entity::GetReferencePoints(std::vector<Vector> *refs) {
         case Type::ARC_OF_CIRCLE:
         case Type::CUBIC:
         case Type::CUBIC_PERIODIC:
+        case Type::RATIONAL_CUBIC:
+        case Type::ELLIPSE:
         case Type::TTF_TEXT:
         case Type::IMAGE:
             refs->push_back(SK.GetEntity(point[0])->PointGetDrawNum());
@@ -575,6 +581,10 @@ void Entity::Draw(DrawAs how, Canvas *canvas) {
         case Type::POINT_N_ROT_TRANS:
         case Type::POINT_N_ROT_AA:
         case Type::POINT_N_ROT_AXIS_TRANS:
+        case Type::POINT_N_TRANSFORM:
+        case Type::POINT_N_TRANSFORM_ROT:
+        case Type::POINT_N_TRANSFORM_SCALE:
+        case Type::POINT_N_TRANSFORM_ROT3D:
         case Type::POINT_IN_3D:
         case Type::POINT_IN_2D: {
             if(how == DrawAs::HIDDEN) return;
@@ -748,6 +758,13 @@ void Entity::Draw(DrawAs how, Canvas *canvas) {
             canvas->DrawVectorText(shortDesc, textHeight, o, u, v, hcs);
             return;
         }
+
+        // [HobbyCAD] Library-only curves: the C API creates them, the GUI
+        // never does, and neither has bezier generation yet, so there is
+        // nothing to draw. Listed so -Werror=switch keeps this switch honest.
+        case Type::RATIONAL_CUBIC:
+        case Type::ELLIPSE:
+            return;
 
         case Type::LINE_SEGMENT:
         case Type::CIRCLE:

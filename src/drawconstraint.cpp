@@ -798,6 +798,23 @@ void Constraint::DoLayout(DrawAs how, Canvas *canvas,
             return;
         }
 
+        // [HobbyCAD] Library-only constraints: the C API creates them, the
+        // GUI never does, and none has a glyph yet, so there is nothing to
+        // lay out. Listed so -Werror=switch keeps this switch honest.
+        case Type::CURVATURE_CONTINUOUS:
+        case Type::PT_ON_CUBIC:
+        case Type::CURVATURE:
+        case Type::PT_ON_RATIONAL_CUBIC:
+        case Type::TANGENT_ANGLE:
+        case Type::CURVATURE_RATIONAL:
+        case Type::TANGENT_ANGLE_RATIONAL:
+        case Type::ARC_MIDPOINT:
+        case Type::PT_ON_ELLIPSE:
+        case Type::ELLIPSE_LINE_TANGENT:
+        case Type::PT_PT_DISTANCE_MIN:
+        case Type::PT_PT_DISTANCE_MAX:
+            return;
+
         case Type::WHERE_DRAGGED: {
             Vector p = SK.GetEntity(ptA)->PointGetDrawNum();
             if(refs) refs->push_back(p);

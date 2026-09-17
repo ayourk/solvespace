@@ -395,6 +395,8 @@ int main(int argc, char **argv) {
         checkTally += helper.checkCount;
         failTally  += helper.failCount;
         if(helper.checkCount == 0) {
+            // A case that checks nothing cannot fail, so count it as one.
+            failTally += 1;
             fprintf(stderr, "  %s   test %s (empty)\n",
                     Colorize(Color::Red, "??").c_str(),
                     Colorize(Color::DarkGreen, testCaseName).c_str());

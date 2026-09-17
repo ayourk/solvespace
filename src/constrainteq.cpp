@@ -83,6 +83,8 @@ bool ConstraintBase::IsProjectible() const {
         case Type::CURVE_CURVE_TANGENT:
         case Type::ARC_LINE_TANGENT:
         case Type::CIRCLE_LINE_TANGENT:
+        case Type::PT_ON_ELLIPSE:
+        case Type::ELLIPSE_LINE_TANGENT:
         case Type::EQUAL_RADIUS:
         case Type::CURVATURE_CONTINUOUS:
         case Type::PT_ON_CUBIC:
@@ -679,6 +681,49 @@ void ConstraintBase::GenerateEquations(IdList<Equation,hEquation> *l,
             Expr *radius = circle->CircleGetRadiusExpr();
             Expr *d = PointLineDistance(workplane, circle->point[0], entityB);
             AddEq(l, d->Square()->Minus(radius->Square()), 0);
+            return;
+        }
+
+        case Type::PT_ON_ELLIPSE: {
+            // [HobbyCAD 0028] Point on an ellipse, in the ellipse's own frame.
+            // With the semi-axes A and B and d = P - C,
+            //     (d.A)^2 / (A.A)^2 + (d.B)^2 / (B.B)^2 = 1
+            // is (x/a)^2 + (y/b)^2 = 1 with no square root and no foci, so
+            // it is exact for any radii and a round ellipse is no special
+            // case. Dimensionless, like a direction cosine.
+            EntityBase *ell = SK.GetEntity(entityA);
+            hEntity wp = (workplane != EntityBase::FREE_IN_3D) ? workplane : ell->workplane;
+            ExprVector c, a, b;
+            ell->EllipseGetExprsInWorkplane(wp, &c, &a, &b);
+            ExprVector d = SK.GetEntity(ptA)->PointGetExprsInWorkplane(wp).Minus(c);
+            Expr *ta = (d.Dot(a))->Square()->Div((a.Dot(a))->Square());
+            Expr *tb = (d.Dot(b))->Square()->Div((b.Dot(b))->Square());
+            AddEq(l, (ta->Plus(tb))->Minus(Expr::From(1.0)), 0);
+            return;
+        }
+
+        case Type::ELLIPSE_LINE_TANGENT: {
+            // [HobbyCAD 0028] A line is tangent to the ellipse
+            // X(t) = C + A cos t + B sin t exactly when its distance from the
+            // center equals the ellipse's half-extent across the line's
+            // normal n: since n.X(t) ranges over n.C +- sqrt((n.A)^2 + (n.B)^2),
+            //     (n.(L0 - C))^2 = (n.A)^2 + (n.B)^2.
+            // No foci and no square root, valid for any semi-axes. n is the
+            // line's direction turned a quarter turn, left unnormalized; every
+            // term carries |m|^2, and dividing it out leaves length^2, the
+            // same scale as CIRCLE_LINE_TANGENT.
+            EntityBase *ell  = SK.GetEntity(entityA);
+            EntityBase *line = SK.GetEntity(entityB);
+            hEntity wp = (workplane != EntityBase::FREE_IN_3D) ? workplane : ell->workplane;
+            ExprVector c, a, b;
+            ell->EllipseGetExprsInWorkplane(wp, &c, &a, &b);
+            ExprVector l0 = SK.GetEntity(line->point[0])->PointGetExprsInWorkplane(wp);
+            ExprVector l1 = SK.GetEntity(line->point[1])->PointGetExprsInWorkplane(wp);
+            ExprVector m = l1.Minus(l0);
+            ExprVector n = ExprVector::From(m.y->Negate(), m.x, Expr::From(0.0));
+            Expr *reach = ((n.Dot(a))->Square())->Plus((n.Dot(b))->Square());
+            Expr *dist  = (n.Dot(l0.Minus(c)))->Square();
+            AddEq(l, (dist->Minus(reach))->Div(m.Dot(m)), 0);
             return;
         }
 

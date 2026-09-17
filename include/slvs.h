@@ -58,6 +58,12 @@
 /* [HobbyCAD 0019] SLVS_C_ARC_MIDPOINT: constrain a point to an arc's midpoint
  * (the perimeter point at the angular mid of the arc). */
 #define SLVS_HAS_ARC_MIDPOINT 1
+/* [HobbyCAD 0028] SLVS_E_ELLIPSE: an ellipse as its center and the two points
+ * at the ends of its +major and +minor semi-axes. The entity keeps the two
+ * axes perpendicular itself (as an arc keeps its two radii equal), so the
+ * six point parameters carry 5 degrees of freedom. With it come
+ * SLVS_C_PT_ON_ELLIPSE and SLVS_C_ELLIPSE_LINE_TANGENT, both exact. */
+#define SLVS_HAS_ELLIPSE 1
 
 #if defined(WIN32) && !defined(STATIC_LIB)
 #   ifdef EXPORT_DLL
@@ -119,6 +125,7 @@ typedef struct {
 #define SLVS_E_TRANSFORM_ROT        80007  /* [HobbyCAD] live-source point rotated about Z by a free angle, then translated (planar; arbitrary-axis 3D later). */
 #define SLVS_E_TRANSFORM_SCALE      80008  /* [HobbyCAD] live-source point scaled about origin by a free factor, then translated. */
 #define SLVS_E_TRANSFORM_ROT3D      80009  /* [HobbyCAD] live-source point rotated about a fixed arbitrary axis by a free angle, then translated. */
+#define SLVS_E_ELLIPSE              80010  /* [HobbyCAD] ellipse: center, +major end, +minor end; the entity keeps the axes perpendicular. */
 
 typedef struct {
     Slvs_hEntity    h;
@@ -178,6 +185,8 @@ typedef struct {
 #define SLVS_C_PT_PT_DISTANCE_MIN       100046  /* [HobbyCAD] d >= valA (inequality via slack; from 0xSeren) */
 #define SLVS_C_PT_PT_DISTANCE_MAX       100047  /* [HobbyCAD] d <= valA (inequality via slack; from 0xSeren) */
 #define SLVS_C_CIRCLE_LINE_TANGENT      100048  /* [HobbyCAD] circle/arc tangent to a line; issue #1492 */
+#define SLVS_C_PT_ON_ELLIPSE            100049  /* [HobbyCAD] point on an ellipse (ptA on entityA) */
+#define SLVS_C_ELLIPSE_LINE_TANGENT     100050  /* [HobbyCAD] ellipse (entityA) tangent to a line (entityB) */
 #define SLVS_C_LENGTH_DIFFERENCE        100033
 #define SLVS_C_ARC_ARC_LEN_RATIO        100034
 #define SLVS_C_ARC_LINE_LEN_RATIO       100035
@@ -467,6 +476,28 @@ static inline Slvs_Entity Slvs_MakeArcOfCircle(Slvs_hEntity h, Slvs_hGroup group
     r.point[2] = end;
     return r;
 }
+/* [HobbyCAD] array-path maker for an ellipse: the center, the point at the end
+   of the +major semi-axis, the point at the end of the +minor semi-axis. All
+   three are 2d points on `wrkpl`; the entity is workplane-only, like an arc.
+   Six parameters less the entity's own perpendicularity equation: 5 DOF. */
+static inline Slvs_Entity Slvs_MakeEllipse(Slvs_hEntity h, Slvs_hGroup group,
+                                           Slvs_hEntity wrkpl,
+                                           Slvs_hEntity normal,
+                                           Slvs_hEntity center,
+                                           Slvs_hEntity majorEnd, Slvs_hEntity minorEnd)
+{
+    Slvs_Entity r;
+    memset(&r, 0, sizeof(r));
+    r.h = h;
+    r.group = group;
+    r.type = SLVS_E_ELLIPSE;
+    r.wrkpl = wrkpl;
+    r.normal = normal;
+    r.point[0] = center;
+    r.point[1] = majorEnd;
+    r.point[2] = minorEnd;
+    return r;
+}
 static inline Slvs_Entity Slvs_MakeCircle(Slvs_hEntity h, Slvs_hGroup group,
                                           Slvs_hEntity wrkpl,
                                           Slvs_hEntity center,
@@ -569,6 +600,8 @@ DLL Slvs_Entity Slvs_AddCubic(uint32_t grouph, Slvs_Entity ptA, Slvs_Entity ptB,
 /* [HobbyCAD] rational cubic: 4 control points + 4 weights. */
 DLL Slvs_Entity Slvs_AddRationalCubic(uint32_t grouph, Slvs_Entity ptA, Slvs_Entity ptB, Slvs_Entity ptC, Slvs_Entity ptD, double w0, double w1, double w2, double w3, Slvs_Entity workplane);
 DLL Slvs_Entity Slvs_AddArc(uint32_t grouph, Slvs_Entity normal, Slvs_Entity center, Slvs_Entity start, Slvs_Entity end, Slvs_Entity workplane);
+/* [HobbyCAD] ellipse: center, +major end, +minor end (2d points on the workplane). */
+DLL Slvs_Entity Slvs_AddEllipse(uint32_t grouph, Slvs_Entity normal, Slvs_Entity center, Slvs_Entity majorEnd, Slvs_Entity minorEnd, Slvs_Entity workplane);
 DLL Slvs_Entity Slvs_AddCircle(uint32_t grouph, Slvs_Entity normal, Slvs_Entity center, Slvs_Entity radius, Slvs_Entity workplane);
 DLL Slvs_Entity Slvs_AddWorkplane(uint32_t grouph, Slvs_Entity origin, Slvs_Entity nm);
 DLL Slvs_Entity Slvs_AddBase2D(uint32_t grouph);

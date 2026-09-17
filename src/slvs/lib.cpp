@@ -119,6 +119,8 @@ case SLVS_C_PARALLEL:            return ConstraintBase::Type::PARALLEL;
 case SLVS_C_PERPENDICULAR:       return ConstraintBase::Type::PERPENDICULAR;
 case SLVS_C_ARC_LINE_TANGENT:    return ConstraintBase::Type::ARC_LINE_TANGENT;
 case SLVS_C_CIRCLE_LINE_TANGENT: return ConstraintBase::Type::CIRCLE_LINE_TANGENT;
+case SLVS_C_PT_ON_ELLIPSE:       return ConstraintBase::Type::PT_ON_ELLIPSE;
+case SLVS_C_ELLIPSE_LINE_TANGENT: return ConstraintBase::Type::ELLIPSE_LINE_TANGENT;
 case SLVS_C_CUBIC_LINE_TANGENT:  return ConstraintBase::Type::CUBIC_LINE_TANGENT;
 case SLVS_C_EQUAL_RADIUS:        return ConstraintBase::Type::EQUAL_RADIUS;
 case SLVS_C_PROJ_PT_DISTANCE:    return ConstraintBase::Type::PROJ_PT_DISTANCE;
@@ -146,6 +148,7 @@ case SLVS_E_TRANSFORM_ROT:      return EntityBase::Type::POINT_N_TRANSFORM_ROT;
 case SLVS_E_TRANSFORM_SCALE:    return EntityBase::Type::POINT_N_TRANSFORM_SCALE;
 case SLVS_E_TRANSFORM_ROT3D:    return EntityBase::Type::POINT_N_TRANSFORM_ROT3D;
 case SLVS_E_RATIONAL_CUBIC:     return EntityBase::Type::RATIONAL_CUBIC;
+case SLVS_E_ELLIPSE:            return EntityBase::Type::ELLIPSE;
 default: Platform::FatalError("bad entity type " + std::to_string(type));
     }
 }
@@ -210,6 +213,9 @@ static bool Slvs_CanInitiallySatisfy(const ConstraintBase &c) {
     case ConstraintBase::Type::POINTS_COINCIDENT:
     case ConstraintBase::Type::PT_ON_CUBIC:
     case ConstraintBase::Type::PT_ON_RATIONAL_CUBIC:
+    case ConstraintBase::Type::PT_ON_ELLIPSE:
+    case ConstraintBase::Type::ELLIPSE_LINE_TANGENT:
+        // [HobbyCAD 0028] Nothing to seed: no value, no parameter.
     case ConstraintBase::Type::PT_PT_DISTANCE_MIN:
     case ConstraintBase::Type::PT_PT_DISTANCE_MAX:
     case ConstraintBase::Type::SYMMETRIC:
@@ -689,6 +695,43 @@ Slvs_Entity Slvs_AddArc(uint32_t grouph, Slvs_Entity normal, Slvs_Entity center,
     ce.point[0] = center.h;
     ce.point[1] = start.h;
     ce.point[2] = end.h;
+    return ce;
+}
+
+// [HobbyCAD 0028] Ellipse: center, +major end, +minor end, all 2d points on
+// the workplane. The entity itself keeps the two axes perpendicular.
+Slvs_Entity Slvs_AddEllipse(uint32_t grouph, Slvs_Entity normal, Slvs_Entity center, Slvs_Entity majorEnd, Slvs_Entity minorEnd,
+                            Slvs_Entity workplane) {
+    if(!Slvs_IsWorkplane(workplane)) {
+        Platform::FatalError("workplane argument is not a workplane");
+    } else if(!Slvs_IsNormal3D(normal)) {
+        Platform::FatalError("normal argument is not a 3d normal");
+    } else if(!Slvs_IsPoint2D(center)) {
+        Platform::FatalError("center argument is not a 2d point");
+    } else if(!Slvs_IsPoint2D(majorEnd)) {
+        Platform::FatalError("majorEnd argument is not a 2d point");
+    } else if(!Slvs_IsPoint2D(minorEnd)) {
+        Platform::FatalError("minorEnd argument is not a 2d point");
+    }
+    EntityBase e  = {};
+    e.type        = EntityBase::Type::ELLIPSE;
+    e.group.v     = grouph;
+    e.workplane.v = workplane.h;
+    e.normal.v    = normal.h;
+    e.point[0].v  = center.h;
+    e.point[1].v  = majorEnd.h;
+    e.point[2].v  = minorEnd.h;
+    SK.entity.AddAndAssignId(&e);
+
+    Slvs_Entity ce = Slvs_Entity {};
+    ce.h = e.h.v;
+    ce.type = SLVS_E_ELLIPSE;
+    ce.group = grouph;
+    ce.wrkpl = workplane.h;
+    ce.normal = normal.h;
+    ce.point[0] = center.h;
+    ce.point[1] = majorEnd.h;
+    ce.point[2] = minorEnd.h;
     return ce;
 }
 

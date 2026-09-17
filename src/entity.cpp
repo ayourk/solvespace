@@ -126,6 +126,25 @@ bool EntityBase::IsCircle() const {
     return (type == Type::CIRCLE) || (type == Type::ARC_OF_CIRCLE);
 }
 
+// [HobbyCAD 0028] An ellipse is its center C and the points at the ends of its
+// +major and +minor semi-axes. The vectors handed back are the semi-axes
+// A = P1 - C and B = P2 - C, so |A| and |B| are the two radii. Everything is
+// projected into `wrkpl`, or into the entity's own workplane when the caller
+// has none (a constraint written free in 3d).
+bool EntityBase::IsEllipse() const {
+    return type == Type::ELLIPSE;
+}
+
+void EntityBase::EllipseGetExprsInWorkplane(hEntity wrkpl,
+                                            ExprVector *c, ExprVector *a, ExprVector *b) const
+{
+    ssassert(type == Type::ELLIPSE, "Expected an ellipse");
+    if(wrkpl == FREE_IN_3D) wrkpl = workplane;
+    *c = SK.GetEntity(point[0])->PointGetExprsInWorkplane(wrkpl);
+    *a = SK.GetEntity(point[1])->PointGetExprsInWorkplane(wrkpl).Minus(*c);
+    *b = SK.GetEntity(point[2])->PointGetExprsInWorkplane(wrkpl).Minus(*c);
+}
+
 Expr *EntityBase::CircleGetRadiusExpr() const {
     if(type == Type::CIRCLE) {
         return SK.GetEntity(distance)->DistanceGetExpr();
@@ -1138,6 +1157,19 @@ void EntityBase::GenerateEquations(IdList<Equation,hEquation> *l) const {
             Expr *ra = Constraint::Distance(workplane, point[0], point[1]);
             Expr *rb = Constraint::Distance(workplane, point[0], point[2]);
             AddEq(l, ra->Minus(rb), 0);
+            break;
+        }
+
+        case Type::ELLIPSE: {
+            // [HobbyCAD 0028] The two semi-axes stay perpendicular. Written
+            // as the direction cosine so it is scale-free, the way the
+            // PERPENDICULAR constraint is. A copied entity has its points
+            // fixed with respect to each other already, so no equation then.
+            if(SK.GetEntity(point[0])->type != Type::POINT_IN_2D) break;
+            ExprVector c, a, b;
+            EllipseGetExprsInWorkplane(workplane, &c, &a, &b);
+            Expr *mags = (a.Magnitude())->Times(b.Magnitude());
+            AddEq(l, (a.Dot(b))->Div(mags), 0);
             break;
         }
 

@@ -455,6 +455,7 @@ public:
         CUBIC_PERIODIC         = 12001,
         RATIONAL_CUBIC         = 12002,  // [HobbyCAD] weighted cubic Bezier
         CIRCLE                 = 13000,
+        ELLIPSE                = 13001,  // [HobbyCAD] center, +major end, +minor end
         ARC_OF_CIRCLE          = 14000,
         TTF_TEXT               = 15000,
         IMAGE                  = 16000
@@ -496,6 +497,11 @@ public:
     Expr *CircleGetRadiusExpr() const;
     double CircleGetRadiusNum() const;
     void ArcGetAngles(double *thetaa, double *thetab, double *dtheta) const;
+    // [HobbyCAD 0028] ellipse: center C and the semi-axis vectors A = P1 - C
+    // and B = P2 - C, projected into wrkpl (the entity's own if FREE_IN_3D).
+    bool IsEllipse() const;
+    void EllipseGetExprsInWorkplane(hEntity wrkpl,
+                                    ExprVector *c, ExprVector *a, ExprVector *b) const;
 
     bool HasVector() const;
     ExprVector VectorGetExprs() const;
@@ -707,6 +713,8 @@ public:
         TANGENT_ANGLE_RATIONAL = 133,  // [HobbyCAD] tangent-angle dim on a rational cubic
         ARC_MIDPOINT           = 134,  // [HobbyCAD] point at an arc's midpoint
         CIRCLE_LINE_TANGENT    = 135,  // [HobbyCAD] circle/arc tangent to a line (issue #1492, @ruevs)
+        PT_ON_ELLIPSE          = 136,  // [HobbyCAD] point on an ellipse
+        ELLIPSE_LINE_TANGENT   = 137,  // [HobbyCAD] ellipse tangent to a line
         PT_PT_DISTANCE_MIN     = 140,  // [HobbyCAD] d >= valA (inequality via slack; from 0xSeren PR)
         PT_PT_DISTANCE_MAX     = 141,  // [HobbyCAD] d <= valA (inequality via slack; from 0xSeren PR)
         WHERE_DRAGGED          = 200,

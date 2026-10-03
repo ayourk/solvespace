@@ -247,6 +247,12 @@ set(MI_OVERRIDE OFF CACHE BOOL "")
 set(MI_BUILD_SHARED OFF CACHE BOOL "")
 set(MI_BUILD_OBJECT OFF CACHE BOOL "")
 set(MI_BUILD_TESTS OFF CACHE BOOL "")
+# mimalloc turns its architecture flags on by itself for arm64, compiling with
+# -march=armv8.1-a (/arch:armv8.1 under MSVC), and its load-time constructor
+# then executes an ARMv8.1 atomic: on an ARMv8.0 processor (Raspberry Pi 3
+# and 4, Cortex-A53/A72) the library dies with SIGILL before the host reaches
+# main. Default them off; -DMI_NO_OPT_ARCH=OFF still opts back in.
+set(MI_NO_OPT_ARCH ON CACHE BOOL "")
 if(EMSCRIPTEN)
     # HACK: We only use mimalloc for the temporary heap, not as a general purpose
     # allocator. However, the Emscripten port of mimalloc assumes that it is used

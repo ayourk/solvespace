@@ -72,6 +72,85 @@ static int CmdResave(const std::string &filename) {
     return 0;
 }
 
+struct StepResult {
+    SolveResult how;
+    double      signedAngle;
+    int         dof;
+    int         bad;
+};
+
+// Set constraint hc to value, regenerate, and report how the group solved.
+static StepResult SetAndSolve(uint32_t hcv, double value, bool verbose) {
+    hConstraint hc = {hcv};
+    Constraint *c = SK.GetConstraint(hc);
+    hGroup hg = c->group;
+    c->valA = value;
+    SS.MarkGroupDirty(hg);
+    // This is what the GUI does after an edit: MarkGroupDirty() schedules a
+    // Generate::DIRTY pass, which is run from the event loop.
+    if(getenv("SS_GENERATE_ALL")) {
+        SS.GenerateAll(SolveSpaceUI::Generate::ALL);
+    } else {
+        SS.GenerateAll();
+    }
+
+    Group *g = SK.GetGroup(hg);
+    StepResult sr = { g->solved.how, 0.0, g->solved.dof, g->solved.remove.n };
+
+    // Report the geometry too, not just the result code: converging to a
+    // mirrored or otherwise different solution is not a success.
+    c = SK.constraint.FindByIdNoOops(hc);
+    // A 3d angle has no workplane to project into; report it unsigned (0).
+    if(c && c->type == Constraint::Type::ANGLE && c->workplane != Entity::FREE_IN_3D) {
+        Vector a = SK.GetEntity(c->entityA)->VectorGetNum();
+        Vector b = SK.GetEntity(c->entityB)->VectorGetNum();
+        if(c->other) a = a.ScaledBy(-1);
+        a = a.ProjectVectorInto(c->workplane);
+        b = b.ProjectVectorInto(c->workplane);
+        Vector n = SK.GetEntity(c->workplane)->Normal()->NormalN();
+        double dot = a.Dot(b) / (a.Magnitude() * b.Magnitude());
+        double crs = a.Cross(b).Dot(n) / (a.Magnitude() * b.Magnitude());
+        sr.signedAngle = atan2(crs, dot) * 180 / PI;
+    }
+
+    if(verbose) {
+        fprintf(stderr, "  set c%u = %.10g -> %s (dof=%d, bad=%d, signed angle=%.9g)\n",
+                hcv, value, SolveResultName(sr.how), g->solved.dof, g->solved.remove.n,
+                sr.signedAngle);
+        for(int i = 0; i < g->solved.remove.n; i++) {
+            Constraint *bc = SK.constraint.FindByIdNoOops(g->solved.remove[i]);
+            fprintf(stderr, "      bad constraint %u type %d\n", g->solved.remove[i].v,
+                    bc ? (int)bc->type : -1);
+        }
+    }
+    return sr;
+}
+
+static bool LoadSketch(const std::string &file) {
+    SS.Init();
+    SS.showToolbar = false;
+    SS.checkClosedContour = false;
+    if(!SS.LoadFromFile(Platform::Path::From(file))) {
+        fprintf(stderr, "cannot load %s\n", file.c_str());
+        return false;
+    }
+    SS.AfterNewFile();
+    return true;
+}
+
+// List every dimensional constraint in the file, so we know what to drive.
+static int CmdDims(const std::string &file) {
+    if(!LoadSketch(file)) return 1;
+    for(Constraint &c : SK.constraint) {
+        if(!c.HasLabel()) continue;
+        fprintf(stderr, "c%-10u group %08x type %-3d valA=%.10g  %s\n",
+                c.h.v, c.group.v, (int)c.type, c.valA,
+                c.DescriptionString().c_str());
+    }
+    Platform::FreeAllTemporary();
+    return 0;
+}
+
 int main(int argc, char **argv) {
     std::vector<std::string> args = Platform::InitCli(argc, argv);
 
@@ -79,6 +158,34 @@ int main(int argc, char **argv) {
         return CmdSolve(args[2]);
     } else if(args.size() == 3 && args[1] == "resave") {
         return CmdResave(args[2]);
+    } else if(args.size() == 3 && args[1] == "dims") {
+        return CmdDims(args[2]);
+    } else if(args.size() >= 5 && args[1] == "step") {
+        // step <file.slvs> <constraint-handle> <value> [<value> ...]
+        if(!LoadSketch(args[2])) return 1;
+        uint32_t hcv = (uint32_t)strtoul(args[3].c_str(), NULL, 0);
+        for(size_t i = 4; i < args.size(); i++) {
+            SetAndSolve(hcv, strtod(args[i].c_str(), NULL), /*verbose=*/true);
+        }
+        Platform::FreeAllTemporary();
+    } else if(args.size() == 8 && args[1] == "sweep") {
+        // sweep <file.slvs> <constraint-handle> <start> <from> <to> <step>
+        uint32_t hcv = (uint32_t)strtoul(args[3].c_str(), NULL, 0);
+        double start = strtod(args[4].c_str(), NULL);
+        double from  = strtod(args[5].c_str(), NULL);
+        double to    = strtod(args[6].c_str(), NULL);
+        double step  = strtod(args[7].c_str(), NULL);
+        for(double target = from; target <= to + step/2; target += step) {
+            if(!LoadSketch(args[2])) return 1;
+            StepResult a = SetAndSolve(hcv, start, /*verbose=*/false);
+            StepResult b = SetAndSolve(hcv, target, /*verbose=*/false);
+            printf("%.6g %.6g %s %s %.9g\n", start, target,
+                   SolveResultName(a.how), SolveResultName(b.how), b.signedAngle);
+            fflush(stdout);
+            SK.Clear();
+            SS.Clear();
+        }
+        Platform::FreeAllTemporary();
     } else if(args.size() == 3 && args[1] == "expr") {
         std::string expr = args[2], err;
         Expr *e = Expr::Parse(expr.c_str(), &err);
@@ -99,6 +206,14 @@ Commands:
         Load a file and report how each group solved.
     resave [file.slvs]
         Load a file, regenerate it, and save it back.
+    dims [file.slvs]
+        List the dimensional constraints in a file.
+    step [file.slvs] [constraint-handle] [value]...
+        Load a sketch, then repeatedly set a constraint value and re-solve,
+        reporting the solve result of each step.
+    sweep [file.slvs] [constraint-handle] [start] [from] [to] [step]
+        For each target value in [from, to], load the sketch, solve it at
+        [start], then at the target, and report both solve results.
 )");
     }
 

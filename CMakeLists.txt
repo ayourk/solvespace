@@ -13,7 +13,17 @@ endif()
 list(APPEND CMAKE_MODULE_PATH
     "${CMAKE_SOURCE_DIR}/cmake/")
 
-set(CMAKE_CXX_STANDARD 11)
+# The temporary heap: C++17's monotonic buffer by default, which needs no
+# vendored allocator; OFF builds the in-tree mimalloc instead. Declared before
+# the language standard is chosen, since it decides that standard.
+set(ENABLE_STD_TEMP_HEAP ON CACHE BOOL
+    "Use the C++17 monotonic buffer for the temporary heap instead of mimalloc")
+if(ENABLE_STD_TEMP_HEAP)
+    set(CMAKE_CXX_STANDARD 17)
+else()
+    # Eigen 5 needs C++14, so the mimalloc build cannot stay at 11.
+    set(CMAKE_CXX_STANDARD 14)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
 # for /MT on MSVC
@@ -242,34 +252,41 @@ if(ENABLE_GUI OR ENABLE_CLI)
     add_subdirectory(extlib/libdxfrw)
 endif()
 
-message(STATUS "Using in-tree mimalloc")
-set(MI_OVERRIDE OFF CACHE BOOL "")
-set(MI_BUILD_SHARED OFF CACHE BOOL "")
-set(MI_BUILD_OBJECT OFF CACHE BOOL "")
-set(MI_BUILD_TESTS OFF CACHE BOOL "")
-# mimalloc turns its architecture flags on by itself for arm64, compiling with
-# -march=armv8.1-a (/arch:armv8.1 under MSVC), and its load-time constructor
-# then executes an ARMv8.1 atomic: on an ARMv8.0 processor (Raspberry Pi 3
-# and 4, Cortex-A53/A72) the library dies with SIGILL before the host reaches
-# main. Default them off; -DMI_NO_OPT_ARCH=OFF still opts back in.
-set(MI_NO_OPT_ARCH ON CACHE BOOL "")
-if(EMSCRIPTEN)
-    # HACK: We only use mimalloc for the temporary heap, not as a general purpose
-    # allocator. However, the Emscripten port of mimalloc assumes that it is used
-    # as the system allocator, and depends on the slow emmalloc allocator.
-    # We do not want to enable emmalloc, as that would slow down allocations all
-    # over the place, so we must either use mimalloc as the system allocator as
-    # well, or override its definitions to just use the existing system allocator.
-    # The latter option is the least intrusive change from a stability standpoint,
-    # so for now that's what we do here. We can try to convert to mimalloc wholsale
-    # and remove this hack if we find the need to do so in the future.
-    set(MI_EXTRA_CPPDEFS "emmalloc_free=free;emmalloc_memalign=memalign" CACHE INTERNAL "")
+if(NOT ENABLE_STD_TEMP_HEAP)
+    message(STATUS "Using in-tree mimalloc")
+    set(MI_OVERRIDE OFF CACHE BOOL "")
+    set(MI_BUILD_SHARED OFF CACHE BOOL "")
+    set(MI_BUILD_OBJECT OFF CACHE BOOL "")
+    set(MI_BUILD_TESTS OFF CACHE BOOL "")
+    # mimalloc turns its architecture flags on by itself for arm64, compiling with
+    # -march=armv8.1-a (/arch:armv8.1 under MSVC), and its load-time constructor
+    # then executes an ARMv8.1 atomic: on an ARMv8.0 processor (Raspberry Pi 3
+    # and 4, Cortex-A53/A72) the library dies with SIGILL before the host reaches
+    # main. Default them off; -DMI_NO_OPT_ARCH=OFF still opts back in.
+    set(MI_NO_OPT_ARCH ON CACHE BOOL "")
+    if(EMSCRIPTEN)
+        # HACK: We only use mimalloc for the temporary heap, not as a general purpose
+        # allocator. However, the Emscripten port of mimalloc assumes that it is used
+        # as the system allocator, and depends on the slow emmalloc allocator.
+        # We do not want to enable emmalloc, as that would slow down allocations all
+        # over the place, so we must either use mimalloc as the system allocator as
+        # well, or override its definitions to just use the existing system allocator.
+        # The latter option is the least intrusive change from a stability standpoint,
+        # so for now that's what we do here. We can try to convert to mimalloc wholsale
+        # and remove this hack if we find the need to do so in the future.
+        set(MI_EXTRA_CPPDEFS "emmalloc_free=free;emmalloc_memalign=memalign" CACHE INTERNAL "")
+    endif()
+    add_subdirectory(extlib/mimalloc EXCLUDE_FROM_ALL)
+    set(MIMALLOC_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/extlib/mimalloc/include)
 endif()
-add_subdirectory(extlib/mimalloc EXCLUDE_FROM_ALL)
-set(MIMALLOC_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/extlib/mimalloc/include)
 
 if(NOT FORCE_VENDORED_Eigen3)
     find_package(Eigen3 CONFIG)
+    # Eigen 5's package config defines only the Eigen3::Eigen target and no
+    # longer sets EIGEN3_INCLUDE_DIRS; take the include path from the target.
+    if(Eigen3_FOUND AND NOT EIGEN3_INCLUDE_DIRS AND TARGET Eigen3::Eigen)
+        get_target_property(EIGEN3_INCLUDE_DIRS Eigen3::Eigen INTERFACE_INCLUDE_DIRECTORIES)
+    endif()
 endif()
 if(FORCE_VENDORED_Eigen3 OR NOT EIGEN3_INCLUDE_DIRS)
     message(STATUS "Using in-tree Eigen")
@@ -278,8 +295,16 @@ if(FORCE_VENDORED_Eigen3 OR NOT EIGEN3_INCLUDE_DIRS)
 else()
     message(STATUS "Using system Eigen: ${EIGEN3_INCLUDE_DIRS}")
 endif()
-if(NOT EXISTS "${EIGEN3_INCLUDE_DIRS}")
-    message(FATAL_ERROR "Eigen 3 not found on system or in-tree")
+# Test for a header, not the directory: an unfetched extlib/eigen submodule
+# exists but is empty.
+set(EIGEN3_HEADER_FOUND NO)
+foreach(dir ${EIGEN3_INCLUDE_DIRS})
+    if(EXISTS "${dir}/Eigen/SparseCore")
+        set(EIGEN3_HEADER_FOUND YES)
+    endif()
+endforeach()
+if(NOT EIGEN3_HEADER_FOUND)
+    message(FATAL_ERROR "Eigen not found on the system or in-tree (looked for Eigen/SparseCore in: ${EIGEN3_INCLUDE_DIRS})")
 endif()
 
 
@@ -473,6 +498,10 @@ if(WIN32)
         -D_UNICODE
         -DNOMINMAX
         -D_USE_MATH_DEFINES)
+endif()
+
+if(ENABLE_STD_TEMP_HEAP)
+    add_definitions(-DENABLE_STD_TEMP_HEAP)
 endif()
 
 if(MSVC)

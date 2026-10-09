@@ -400,14 +400,40 @@ bool System::NewtonSolve() {
         mat.B.num[i] = (mat.B.sym[i])->Eval();
     }
 
-    // Where we were before we took the step, so that we can take a different
-    // one from the same operating point when the first is no good.
+    auto isConverged = [&]() {
+        for(int k = 0; k < mat.m; k++) {
+            if(fabs(mat.B.num[k]) > CONVERGE_TOLERANCE) return false;
+        }
+        return true;
+    };
+
+    // Where we were before we took the step, so that we can take a shorter
+    // one from the same operating point if the first one is no good.
     std::vector<double> prevVal(mat.n);
+
+    // The line search below needs a measure of how far we are from a
+    // solution, and |F|^2 is the wrong one. Our equations mix quantities of
+    // different kinds and units -- a distance in mm, a dot product of unit
+    // vectors, a determinant with units of area -- and adding their squares
+    // weighs an error of 0.5 in a cosine against 40 mm of distance as if
+    // they were the same thing. That refuses a step which fixes the angle
+    // at the cost of a distance error that the next iteration removes. So
+    // weight each equation by the inverse norm of its row of the Jacobian:
+    // F_i/|grad F_i| is the first-order distance from the operating point
+    // to the set where equation i is satisfied, in parameter units,
+    // whatever the units of F_i.
+    Eigen::VectorXd rowScale;
+    auto merit = [&]() {
+        return mat.B.num.cwiseProduct(rowScale).squaredNorm();
+    };
 
     // Take the Newton step,
     //      J(x_n) (x_{n+1} - x_n) = 0 - F(x_n)
     // scaled by relax, and re-evaluate the functions, since the params have
     // just changed. Returns false if that took us somewhere clearly useless.
+    // A NaN would be rejected by the line search anyway (NaN < err is
+    // false), but a parameter or residual that is merely huge would not,
+    // and that is what IsReasonable() catches.
     auto takeStep = [&](double relax) {
         for(int k = 0; k < mat.n; k++) {
             Param *p = param.FindById(mat.param[k]);
@@ -421,56 +447,54 @@ bool System::NewtonSolve() {
         return true;
     };
 
-    // The radius of the region around our operating point that we trust the
-    // linearization in.
-    double trust = 0;
-
-    do {
+    // If the system is already solved then there is no step to take, and
+    // no step could improve on a zero residual, so don't go looking for one.
+    converged = isConverged();
+    if(!converged) do {
         // And evaluate the Jacobian at our initial operating point.
         EvalJacobian();
+
+        rowScale = Eigen::VectorXd::Ones(mat.m);
+        {
+            Eigen::VectorXd rowSq = Eigen::VectorXd::Zero(mat.m);
+            for(int k = 0; k < mat.A.num.outerSize(); k++) {
+                for(Eigen::SparseMatrix<double>::InnerIterator it(mat.A.num, k); it; ++it) {
+                    rowSq[it.row()] += it.value()*it.value();
+                }
+            }
+            for(i = 0; i < mat.m; i++) {
+                if(rowSq[i] > 0) rowScale[i] = 1/sqrt(rowSq[i]);
+            }
+        }
 
         if(!SolveLeastSquares()) break;
 
         for(i = 0; i < mat.n; i++) {
             prevVal[i] = param.FindById(mat.param[i])->val;
         }
-        const double err = mat.B.num.squaredNorm();
-        const double stepNorm = mat.X.norm();
-        if(iter == 0) trust = stepNorm/2;
+        const double err = merit();
 
         // A Newton step is only as good as the linearization of F about our
         // operating point, so where F is strongly curved the full step can
         // land much further from the solution than it started; and if it
         // lands near a critical point of F, then the step after that one is
-        // enormous, and the geometry runs away to nowhere. So don't go
-        // further than the distance we currently trust that linearization
-        // over, and grow that distance only as steps keep working out.
+        // enormous, and the geometry runs away to nowhere. But the step is a
+        // descent direction for the merit, so if the full step makes things
+        // worse, then a short enough step along the same direction makes
+        // them better. So backtrack until the merit actually decreases.
         bool accepted = false;
-        for(int tries = 0; tries < 12 && !accepted && stepNorm > 0; tries++) {
-            double relax = (stepNorm > trust) ? trust/stepNorm : 1.0;
-            accepted = takeStep(relax) && mat.B.num.squaredNorm() < err;
-            if(!accepted) trust /= 4;
+        double relax = 1.0;
+        for(int tries = 0; tries < 8 && !accepted; tries++, relax /= 2) {
+            accepted = takeStep(relax) && merit() < err;
         }
-        if(accepted) {
-            trust *= 2;
-        } else {
-            // Nothing along this direction is an improvement, so just take
-            // the whole thing, like we always used to; if that was a bad
-            // idea, then the iteration limit below will catch it.
-            if(!takeStep(1.0)) {
-                // Very bad, and clearly not convergent
-                return false;
-            }
+        if(!accepted) {
+            // Nothing along this direction is an improvement, not even a
+            // step of 1/128 of the Newton step. Very bad, and clearly not
+            // convergent.
+            return false;
         }
-        
-        // Check for convergence
-        converged = true;
-        for(i = 0; i < mat.m; i++) {
-            if(fabs(mat.B.num[i]) > CONVERGE_TOLERANCE) {
-                converged = false;
-                break;
-            }
-        }
+
+        converged = isConverged();
     } while(iter++ < 50 && !converged);
 
     return converged;

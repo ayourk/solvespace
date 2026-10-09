@@ -14,7 +14,9 @@
 #include <algorithm>
 #include <map>
 
+#ifndef ENABLE_STD_TEMP_HEAP
 #include <mimalloc.h>
+#endif
 
 #if defined(WIN32)
 // Conversely, include Microsoft headers after solvespace.h to avoid clashes.

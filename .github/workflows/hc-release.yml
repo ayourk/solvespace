@@ -306,6 +306,15 @@ jobs:
           - {os_arch: windows-arm64, python: "38"}
           - {os_arch: windows-arm64, python: "39"}
           - {os_arch: windows-arm64, python: "310"}
+    env:
+      CIBW_BUILD: "cp${{ matrix.python }}-*"
+      CIBW_PLATFORM: ${{ matrix.platform }}
+      CIBW_ARCHS: ${{ matrix.cibw_arch }}
+      CIBW_ENVIRONMENT_WINDOWS: >
+        CMAKE_GENERATOR="Visual Studio 17 2022"
+        CMAKE_GENERATOR_PLATFORM="${{ matrix.generator_platform }}"
+      CIBW_ENVIRONMENT_PASS_WINDOWS: "CMAKE_GENERATOR CMAKE_GENERATOR_PLATFORM"
+      CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=10.12
     steps:
       - uses: actions/checkout@v6
       - run: git submodule update --init --depth 1 extlib/mimalloc extlib/eigen
@@ -313,16 +322,24 @@ jobs:
         shell: bash
         run: sed -i.bak "s/^version = .*/version = \"${{ needs.stamp.outputs.pyversion }}\"/" pyproject.toml && rm pyproject.toml.bak
       - name: Build wheels
+        if: matrix.os_arch != 'windows-arm64'
         uses: pypa/cibuildwheel@v3.4.0
-        env:
-          CIBW_BUILD: "cp${{ matrix.python }}-*"
-          CIBW_PLATFORM: ${{ matrix.platform }}
-          CIBW_ARCHS: ${{ matrix.cibw_arch }}
-          CIBW_ENVIRONMENT_WINDOWS: >
-            CMAKE_GENERATOR="Visual Studio 17 2022"
-            CMAKE_GENERATOR_PLATFORM="${{ matrix.generator_platform }}"
-          CIBW_ENVIRONMENT_PASS_WINDOWS: "CMAKE_GENERATOR CMAKE_GENERATOR_PLATFORM"
-          CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=10.12
+      # The self-hosted Windows on Arm runner: the cibuildwheel action first
+      # installs a Python for itself through actions/setup-python, whose
+      # Windows installer writes to HKEY_LOCAL_MACHINE, which the runner's
+      # service account (NETWORK SERVICE) may not do. cibuildwheel only needs
+      # a Python to run from; the CPythons it builds wheels for come from
+      # nuget either way. Same cibuildwheel, same CIBW_* settings.
+      - name: Build wheels (self-hosted Windows on Arm)
+        if: matrix.os_arch == 'windows-arm64'
+        shell: pwsh
+        run: |
+          py -3 -m venv "$env:RUNNER_TEMP\cibw"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & "$env:RUNNER_TEMP\cibw\Scripts\python.exe" -m pip install --disable-pip-version-check cibuildwheel==3.4.0
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & "$env:RUNNER_TEMP\cibw\Scripts\cibuildwheel.exe" --output-dir wheelhouse
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v6
         with:
           name: hc-python-${{ matrix.os_arch }}-cp${{ matrix.python }}

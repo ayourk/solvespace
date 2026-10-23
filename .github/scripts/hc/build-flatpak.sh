@@ -6,8 +6,9 @@
 #
 #  SolveSpace-<version>-linux-<arch>.flatpak for the machine's own
 #  architecture, from upstream's manifest (pkg/flatpak), which builds the
-#  gtkmm stack and SolveSpace from this tree. Only the version this build
-#  reports is added, to a copy of the manifest. Installs with
+#  gtkmm stack and SolveSpace from this tree. A copy of the manifest adds
+#  the version this build reports and puts every module's libraries in
+#  /app/lib. Installs with
 #  `flatpak install --user <file>`; the Freedesktop runtime comes from
 #  Flathub. No tests: those run offline.
 #  SPDX-License-Identifier: GPL-3.0-or-later
@@ -37,6 +38,20 @@ python3 - "$MANIFEST" "$HC" "$VERSION" <<'PY'
 import json, sys
 src, dst, version = sys.argv[1:]
 m = json.load(open(src))
+# Every module installs under /app/lib. With the 25.08 SDK, meson picks
+# /app/lib64 on x86_64 and CMake's GNUInstallDirs picks it on aarch64 too,
+# where neither pkg-config while building nor the loader at run time looks:
+# glibmm could not find sigc++ (meson then tried to clone it, which the
+# offline build sandbox refuses), and SolveSpace could not find json-c.
+for mod in m["modules"]:
+    if not isinstance(mod, dict):
+        continue
+    opts = mod.setdefault("config-opts", [])
+    system = mod.get("buildsystem", "autotools")
+    if system == "meson" and not any(o.startswith(("--libdir", "-Dlibdir")) for o in opts):
+        opts.append("--libdir=lib")
+    elif system in ("cmake", "cmake-ninja") and not any("CMAKE_INSTALL_LIBDIR" in o for o in opts):
+        opts.append("-DCMAKE_INSTALL_LIBDIR=lib")
 for mod in m["modules"]:
     if isinstance(mod, dict) and mod.get("name") == "solvespace":
         mod.setdefault("config-opts", []).append("-DSOLVESPACE_HC_VERSION=" + version)

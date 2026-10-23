@@ -55,8 +55,15 @@ grep -E '^Exec=' "$DESKTOP"
 export APPIMAGE_EXTRACT_AND_RUN=1
 export DEPLOY_GTK_VERSION=3
 export LDAI_OUTPUT="SolveSpace-$VERSION-linux-$ARCH.AppImage"
+# The AppImage exclude list leaves out libgpg-error as part of every base
+# system, yet libgcrypt, which needs it, is bundled (through libsystemd).
+# Fedora's minimal and container images have no libgpg-error, so without it
+# the AppImage does not start there; name it so linuxdeploy deploys it.
+GPGERR=$(ldconfig -p | awk '$1 == "libgpg-error.so.0" { print $NF; exit }')
+[ -n "$GPGERR" ] || { echo "libgpg-error.so.0 not found" >&2; exit 1; }
 ( cd "$TOOLS" && PATH=$TOOLS:$PATH "$LD" --appdir "$APPDIR" --plugin gtk \
-      --desktop-file "$DESKTOP" --output appimage )
+      --library "$GPGERR" --desktop-file "$DESKTOP" --output appimage )
+[ -e "$APPDIR/usr/lib/libgpg-error.so.0" ] || { echo "libgpg-error.so.0 was not bundled" >&2; exit 1; }
 mkdir -p "$OUT"
 mv "$TOOLS/$LDAI_OUTPUT" "$OUT/"
 ls -l "$OUT/$LDAI_OUTPUT"

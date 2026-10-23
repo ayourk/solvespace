@@ -1,0 +1,61 @@
+name: HC submodules
+description: >
+  Check out the bundled libraries, with Eigen's repository kept in the
+  Actions cache. Eigen is the only submodule on GitLab.com, whose load
+  shedding once failed 46 jobs of one release run at checkout.
+inputs:
+  modules:
+    description: Submodule paths, space separated; empty for all of them.
+    default: ''
+  path:
+    description: The repository's directory under the workspace.
+    default: .
+runs:
+  using: composite
+  steps:
+    - id: eigen
+      shell: bash
+      env:
+        MODULES: ${{ inputs.modules }}
+        REPO: ${{ inputs.path }}
+      run: |
+        case " ${MODULES:-extlib/eigen} " in
+          *" extlib/eigen "*) echo "want=true" >> "$GITHUB_OUTPUT" ;;
+          *) echo "want=false" >> "$GITHUB_OUTPUT" ;;
+        esac
+        sha=$(git -C "$REPO" rev-parse HEAD:extlib/eigen)
+        # The path is part of a cache entry, so a checkout elsewhere in the
+        # workspace keeps a key of its own.
+        if [ "$REPO" = . ]; then key=$sha; else key=$sha-${REPO//\//-}; fi
+        echo "key=hc-eigen-$RUNNER_OS-$key" >> "$GITHUB_OUTPUT"
+
+    # The submodule's git directory, not its files: given an existing
+    # .git/modules/<path>, git submodule update checks the pinned commit out
+    # from it and only fetches when that commit is missing.
+    - id: restore
+      if: steps.eigen.outputs.want == 'true'
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ inputs.path }}/.git/modules/extlib/eigen
+        key: ${{ steps.eigen.outputs.key }}
+
+    - shell: bash
+      env:
+        MODULES: ${{ inputs.modules }}
+        REPO: ${{ inputs.path }}
+      run: |
+        for wait in 20 40 80 0; do
+          # MODULES is a word list on purpose.
+          # shellcheck disable=SC2086
+          git -C "$REPO" submodule update --init --depth 1 $MODULES && exit 0
+          [ "$wait" = 0 ] && break
+          echo "::warning::submodule fetch failed, retrying in ${wait}s"
+          sleep "$wait"
+        done
+        exit 1
+
+    - if: steps.eigen.outputs.want == 'true' && steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ inputs.path }}/.git/modules/extlib/eigen
+        key: ${{ steps.eigen.outputs.key }}

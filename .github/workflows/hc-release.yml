@@ -40,7 +40,7 @@
 # Windows on Arm (the arm64 executables and wheels) builds natively in the
 # Pi 5's Windows VM, which takes jobs only while it is running.
 
-name: HobbyCAD Release
+name: SolveSpace HC Release
 
 on:
   schedule:
@@ -128,8 +128,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          submodules: true
           fetch-depth: 0
+          path: solvespace
+      - uses: ./solvespace/.github/actions/hc-submodules
+        with:
           path: solvespace
       - name: Pack
         shell: bash
@@ -167,7 +169,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Bundled libraries
-        run: git submodule update --init --depth 1 extlib/cairo extlib/freetype extlib/libdxfrw extlib/libpng extlib/mimalloc extlib/pixman extlib/zlib extlib/eigen
+        uses: ./.github/actions/hc-submodules
+        with:
+          modules: extlib/cairo extlib/freetype extlib/libdxfrw extlib/libpng extlib/mimalloc extlib/pixman extlib/zlib extlib/eigen
       - name: Build
         run: /bin/bash .github/scripts/hc/build-macos.sh ${{ matrix.arch }} ${{ needs.stamp.outputs.version }} dist
       - uses: actions/upload-artifact@v6
@@ -193,8 +197,8 @@ jobs:
             os: [self-hosted, Windows, ARM64]
     steps:
       - uses: actions/checkout@v6
-        with:
-          submodules: true
+      - name: Bundled libraries
+        uses: ./.github/actions/hc-submodules
       - name: Build
         shell: bash
         run: .github/scripts/hc/build-windows.sh ${{ matrix.arch }} ${{ needs.stamp.outputs.version }} dist
@@ -220,7 +224,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Bundled libraries
-        run: git submodule update --init --depth 1 extlib/libdxfrw extlib/mimalloc extlib/eigen
+        uses: ./.github/actions/hc-submodules
+        with:
+          modules: extlib/libdxfrw extlib/mimalloc extlib/eigen
       - name: Build
         run: .github/scripts/hc/build-appimage.sh ${{ needs.stamp.outputs.version }} dist
       - uses: actions/upload-artifact@v6
@@ -245,7 +251,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Bundled libraries
-        run: git submodule update --init --depth 1 extlib/libdxfrw extlib/mimalloc
+        uses: ./.github/actions/hc-submodules
+        with:
+          modules: extlib/libdxfrw extlib/mimalloc
       # Ubuntu 24.04 confines the unprivileged user namespaces bubblewrap needs.
       - name: Allow unprivileged user namespaces
         run: |
@@ -267,7 +275,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-      - run: git submodule update --init --depth 1 extlib/mimalloc extlib/eigen
+      - name: Bundled libraries
+        uses: ./.github/actions/hc-submodules
+        with:
+          modules: extlib/mimalloc extlib/eigen
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -317,7 +328,10 @@ jobs:
       CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=10.12
     steps:
       - uses: actions/checkout@v6
-      - run: git submodule update --init --depth 1 extlib/mimalloc extlib/eigen
+      - name: Bundled libraries
+        uses: ./.github/actions/hc-submodules
+        with:
+          modules: extlib/mimalloc extlib/eigen
       - name: Set version
         shell: bash
         run: sed -i.bak "s/^version = .*/version = \"${{ needs.stamp.outputs.pyversion }}\"/" pyproject.toml && rm pyproject.toml.bak

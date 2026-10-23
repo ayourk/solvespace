@@ -3,7 +3,8 @@ include(GNUInstallDirs)
 # libslvs
 add_library(slvs-interface INTERFACE)
 target_sources(slvs-interface INTERFACE lib.cpp)
-target_compile_definitions(slvs-interface INTERFACE -DLIBRARY)
+target_compile_definitions(slvs-interface INTERFACE -DLIBRARY
+    SLVS_LIBRARY_VERSION="${SOLVESPACE_HC_VERSION}")
 target_include_directories(slvs-interface INTERFACE ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(slvs-interface INTERFACE slvs-solver)
 if(NOT ENABLE_STD_TEMP_HEAP)
@@ -68,7 +69,13 @@ target_link_libraries(slvs PRIVATE slvs-interface)
 set_target_properties(slvs PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(slvs PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
+# The HobbyCAD fork's library is libslvshc, not libslvs: its Slvs_System
+# layout differs from stock (free parameters, drag weights), so it must never
+# be taken for stock libslvs by a loader or a package manager. The header
+# keeps its name, in its own directory so it can sit beside a stock slvs.h;
+# consumers include <slvs.h> with the include path pkg-config gives.
 set_target_properties(slvs PROPERTIES
+    OUTPUT_NAME   slvshc
     PUBLIC_HEADER ${CMAKE_SOURCE_DIR}/include/slvs.h
     VERSION ${PROJECT_VERSION}
     SOVERSION 1
@@ -79,11 +86,12 @@ install(TARGETS slvs
     COMPONENT     slvs
     LIBRARY       DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE       DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+    RUNTIME       DESTINATION ${CMAKE_INSTALL_BINDIR}
+    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/slvshc)
 # endif()
 
-# pkg-config file. Consumers look for either 'slvs' or 'libslvs'; both names
-# are installed from the same template.
+# pkg-config file, slvshc.pc. Not slvs.pc or libslvs.pc: those belong to
+# stock libslvs, and a consumer asking for them must not get this library.
 #
 # CMAKE_INSTALL_LIBDIR and CMAKE_INSTALL_INCLUDEDIR may be absolute or
 # relative, depending on how GNUInstallDirs resolved them; a template that
@@ -98,10 +106,8 @@ if(IS_ABSOLUTE "${CMAKE_INSTALL_INCLUDEDIR}")
 else()
     set(PKGCONFIG_INCLUDEDIR "\${prefix}/${CMAKE_INSTALL_INCLUDEDIR}")
 endif()
-foreach(pc_name slvs libslvs)
-    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/slvs.pc.in
-                   ${CMAKE_CURRENT_BINARY_DIR}/${pc_name}.pc @ONLY)
-    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${pc_name}.pc
-            COMPONENT   slvs
-            DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
-endforeach()
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/slvs.pc.in
+               ${CMAKE_CURRENT_BINARY_DIR}/slvshc.pc @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/slvshc.pc
+        COMPONENT   slvs
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)

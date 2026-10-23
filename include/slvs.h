@@ -14,21 +14,29 @@
  * HobbyCAD patch-series identification.
  *
  * Upstream SolveSpace release this is based on, plus the revision of the
- * local patch series applied on top.  A library reporting "3.2p1" carries
- * the fatal-error handoff (0002) and the unwind-and-report behaviour (0003);
- * a stock "3.2" carries neither and will abort() the host process on a
+ * local patch series applied on top.  A library reporting "3.3hc" carries
+ * the fatal-error handoff (0002) and the unwind-and-report behavior (0003);
+ * a stock "3.3" carries neither and will abort() the host process on a
  * kernel assertion.
  *
  * Test the FEATURE macros, not this string, when deciding what the library
  * can do.
  * ------------------------------------------------------------------ */
-#define SLVS_UPSTREAM_VERSION_STRING  "3.2"
+#define SLVS_UPSTREAM_VERSION_STRING  "3.3"
 #define SLVS_HOBBYCAD_PATCHLEVEL      1
-#define SLVS_VERSION_STRING           "3.2p1"
+#define SLVS_VERSION_STRING           "3.3hc"
 
 /* True for any HobbyCAD-patched libslvs.  Lets a consumer branch on
  * "is this our build at all" without parsing the version string. */
 #define SLVS_IS_HOBBYCAD_BUILD        1
+/* [HobbyCAD] Layout of the public structs and the values of the public
+ * constants this header describes. Raised whenever a program built against
+ * this header could misread a library built from another: a struct changing
+ * size or field order, or a constant changing value. The library is
+ * libslvshc (SONAME libslvshc.so.1), apart from stock libslvs, whose
+ * Slvs_System layout differs. Slvs_CheckAbi() compares the two at run time. */
+#define SLVS_ABI_VERSION              1
+#define SLVS_HAS_ABI_CHECK            1
 /* [HobbyCAD] Slvs_System exposes the free (under-constrained) parameters. */
 #define SLVS_HAS_FREE_PARAMS 1
 /* [HobbyCAD 0009] Slvs_MarkWeight per-param drag stiffness is available. */
@@ -707,6 +715,25 @@ typedef Slvs_FatalErrorAction (*Slvs_FatalErrorHandler)(
  * solving begins, and do not swap it while a solve is running. */
 DLL void Slvs_SetFatalErrorHandler(Slvs_FatalErrorHandler handler,
                                    void *context);
+
+/* ---- Version and ABI check -------------------------------------------
+ *
+ * SLVS_VERSION_STRING is the header's version; the library reports its own,
+ * which for a nightly carries the date as well, e.g. "3.3hc.2026.10.15".
+ *
+ * A program built against this header can be run against a different build
+ * of the library, most easily on Windows and macOS, where a DLL or dylib of
+ * the same name is not checked for compatibility. Call SLVS_CHECK_ABI() once
+ * at startup: it is true when the library's ABI version and struct sizes are
+ * the ones this header describes. A false result means every structure
+ * passed to the library would be misread, so do not solve.
+ */
+DLL const char *Slvs_GetVersion(void);
+DLL bool Slvs_CheckAbi(int abiVersion, size_t systemSize,
+                       size_t entitySize, size_t constraintSize);
+#define SLVS_CHECK_ABI() \
+    Slvs_CheckAbi(SLVS_ABI_VERSION, sizeof(Slvs_System), \
+                  sizeof(Slvs_Entity), sizeof(Slvs_Constraint))
 
 #ifdef __cplusplus
 }

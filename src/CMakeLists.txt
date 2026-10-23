@@ -505,7 +505,13 @@ if(APPLE)
         add_custom_command(TARGET solvespace POST_BUILD
             COMMAND cp -r ${CMAKE_BINARY_DIR}/Resources $<TARGET_BUNDLE_CONTENT_DIR:solvespace>
         )
-        if(ENABLE_OPENMP)
+        # A static libomp.a (the HobbyCAD release builds) is linked into the
+        # executables and leaves no dylib to bundle.
+        set(LIBOMP_BUNDLED OFF)
+        if(ENABLE_OPENMP AND NOT "${OpenMP_CXX_LIBRARIES}" MATCHES "\\.a(;|$)")
+            set(LIBOMP_BUNDLED ON)
+        endif()
+        if(LIBOMP_BUNDLED)
             execute_process(COMMAND install_name_tool -id ${LIBOMP_LINK_PATH} ${LIBOMP_LIB_PATH})
             message("FROM " ${${LIBOMP_LIB_PATH}} "TO" $<TARGET_BUNDLE_CONTENT_DIR:solvespace>/Resources/libomp.dylib)
             add_custom_command(TARGET solvespace POST_BUILD
@@ -513,7 +519,7 @@ if(APPLE)
                 COMMAND install_name_tool -change ${LIBOMP_LINK_PATH} ${LIBOMP_LINK_PATH_UTILS} $<TARGET_FILE:solvespace-debugtool>
             )
         endif()
-        if(ENABLE_TESTS AND ENABLE_OPENMP)
+        if(ENABLE_TESTS AND LIBOMP_BUNDLED)
             add_custom_command(TARGET solvespace POST_BUILD
                 COMMAND install_name_tool -change ${LIBOMP_LINK_PATH} ${LIBOMP_LINK_PATH_UTILS} $<TARGET_FILE:solvespace-testsuite>)
         endif()

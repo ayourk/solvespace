@@ -6,6 +6,93 @@
 [![solvespace](https://snapcraft.io/solvespace/badge.svg)](https://snapcraft.io/solvespace)
 [![solvespace](https://snapcraft.io/solvespace/trending.svg?name=0)](https://snapcraft.io/solvespace)
 
+## The HobbyCAD build
+
+This fork is SolveSpace with the changes [HobbyCAD][hobbycad] needs, merged
+regularly with [upstream SolveSpace][upstream]. Where it diverges is listed
+here; everything after this section is upstream's own README.
+
+[hobbycad]: https://github.com/ayourk/hobbycad
+[upstream]: https://github.com/solvespace/solvespace
+
+### Where we diverge from upstream
+
+The solver and its C API (libslvs):
+
+- A damped Newton step whose line search weighs each equation in parameter
+  units (BoykoNeov's revision of upstream [#1748][u1748]). It solves a case of
+  [#1105][u1105]'s sketch that upstream's merged #1748 does not, in about half
+  the iterations.
+- A fault inside the solver is handed to the host program instead of calling
+  `abort()` ([#1766][u1766]); the solve reports `SLVS_RESULT_INTERNAL_ERROR`.
+- The solver reports which parameters are still free (under-constrained), and
+  its redundant-constraint test is normalized for scale, hardening the
+  threshold behind [#1769][u1769] for extreme size ratios.
+- New entities: rational cubic Bezier, ellipse, and live-source transforms
+  (translate, rotate, scale, 3D rotate).
+- New constraints: point on a cubic Bezier ([#313][u313]), curvature (G2)
+  continuity between cubics and from a cubic to an arc, curvature and tangent
+  angle dimensions at cubic ends, point at an arc's midpoint, minimum and
+  maximum distance, circle or arc tangent to a line ([#1492][u1492]), and point
+  on and line tangent to an ellipse.
+- Per-parameter drag stiffness, a point-on-line constraint that starts from
+  the point's projection instead of creeping, and constraint operands checked
+  for the right entity types.
+- The library is `libslvshc` (`libslvshc.so.1`, `slvshc.dll`), not `libslvs`:
+  its `Slvs_System` layout differs from upstream's, so a program built for one
+  must never load the other. Its pkg-config file ([#1767][u1767]) is
+  `slvshc.pc`, and the header installs as `slvshc/slvs.h`, so both can be
+  installed side by side. Programs still `#include <slvs.h>`.
+- `slvs.h` reports the patch level it was built with; `Slvs_GetVersion()`
+  reports the library's own version, and `SLVS_CHECK_ABI()` tells a program
+  at startup whether the library it loaded matches the header it was built
+  against.
+
+Builds:
+
+- The solver's temporary heap is C++17's monotonic buffer by default instead
+  of the vendored mimalloc, so the library carries no ARMv8.1 code and runs on
+  ARMv8.0 processors such as the Raspberry Pi 3 and 4. Eigen 5 is supported.
+
+[u313]: https://github.com/solvespace/solvespace/issues/313
+[u1105]: https://github.com/solvespace/solvespace/issues/1105
+[u1492]: https://github.com/solvespace/solvespace/issues/1492
+[u1748]: https://github.com/solvespace/solvespace/pull/1748
+[u1766]: https://github.com/solvespace/solvespace/issues/1766
+[u1767]: https://github.com/solvespace/solvespace/issues/1767
+[u1769]: https://github.com/solvespace/solvespace/issues/1769
+
+### Versions
+
+`3.3hc` is upstream 3.3 with these changes. Builds after it are dated, the
+way nightly builds are: `3.3hc.2026.10.15`, and `3.3hc.2026.10.15.1` for a
+second build that day. Python wheels carry the same version as a local
+version label, `3.3+hc` or `3.3+hc.2026.10.15`, which is why they are never
+published to PyPI.
+
+### Releases (3.3hc in preparation)
+
+Releases of this fork are published on its [releases page][rel-hc]: macOS for
+Apple Silicon and for Intel, the Intel build with OpenMP (upstream dropped it
+there, [#1777][u1777]); Windows builds, the command line included; Linux
+packages; the Python wheels; and the source. Between releases, a dated build
+is published whenever master has changed, always under the same
+[`nightly`][nightly-hc] pre-release. Ubuntu packages of the library are in
+the [ayourk/hobbycad PPA][ppa].
+
+[rel-hc]: https://github.com/ayourk/solvespace/releases
+[nightly-hc]: https://github.com/ayourk/solvespace/releases/tag/nightly
+[u1777]: https://github.com/solvespace/solvespace/issues/1777
+[ppa]: https://launchpad.net/~ayourk/+archive/ubuntu/hobbycad
+
+### Reporting problems
+
+Report problems with anything listed above in this fork's
+[issues](https://github.com/ayourk/solvespace/issues); everything else belongs
+upstream.
+
+---
+
 This repository contains the source code of [SolveSpace][], a parametric
 2d/3d CAD tool.
 

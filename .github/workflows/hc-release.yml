@@ -1,0 +1,425 @@
+# .github/workflows/hc-release.yml
+#
+# The HobbyCAD build's releases: every artifact, built and published from one
+# workflow. Upstream's own workflows (cd.yml, python.yml, test.yml, ...) stay
+# in the tree unchanged, so merges from upstream never conflict here, and stay
+# disabled in this fork's Actions tab.
+#
+# Two kinds of run:
+#   nightly  on the schedule, or by hand (force builds even if nothing
+#            changed): only when master has a commit the last nightly was not
+#            built from. Version <upstream>hc.YYYY.MM.DD, and .1, .2 for later
+#            builds that UTC date: 3.3hc.2026.10.15. Published as the "nightly"
+#            pre-release, deleted and created again each time so its page
+#            (releases/tag/nightly) always holds the newest build; a
+#            lightweight tag znightly-<version> records each one's commit.
+#   release  a pushed tag v3.3hc (or v3.3hc.YYYY.MM.DD): the same artifacts,
+#            published as that tag's release.
+#
+# Builds only: no tests run here, they run offline before a release. Every
+# artifact is self-contained: static where the platform allows it (Windows,
+# macOS), bundled where it does not (AppImage, Flatpak).
+#
+# Artifacts:
+#   solvespace-<version>.tar.xz               source, submodules included
+#   SolveSpace-<version>-macos-<arch>.dmg     arm64 (macOS 11+), x86_64 (10.12+),
+#                                             OpenMP linked statically; built on
+#                                             the self-hosted Intel Mac mini
+#   SolveSpace-<version>-windows-<arch>.exe   x86, x64, arm64, static
+#   solvespace-cli-<version>-windows-<arch>.exe
+#   SolveSpace-<version>-linux-<arch>.AppImage    x86_64, aarch64
+#   SolveSpace-<version>-linux-<arch>.flatpak     x86_64, aarch64
+#   slvs-python-<pyversion>.zip               the Python binding: every wheel and
+#                                             the sdist, under their own names,
+#                                             in one archive; never PyPI (the
+#                                             version is a local label, 3.3+hc)
+#   SHA256SUMS
+#
+# Public repository with self-hosted runners: never add a pull_request
+# trigger, or anyone's pull request would run on the Mac mini or the Pi 5.
+# Windows on Arm (the arm64 executables and wheels) builds natively in the
+# Pi 5's Windows VM, which takes jobs only while it is running.
+
+name: HobbyCAD Release
+
+on:
+  schedule:
+    # 09:41 UTC: off the hour, when GitHub's scheduler is busiest.
+    - cron: '41 9 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build even if master has not changed since the last nightly
+        type: boolean
+        default: false
+  push:
+    tags: ['v*hc*']
+
+concurrency:
+  group: hc-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+
+  # ---- what this run builds, and its version in every spelling ---------
+  stamp:
+    name: Version
+    if: github.repository == 'ayourk/solvespace'
+    runs-on: ubuntu-24.04
+    outputs:
+      build: ${{ steps.s.outputs.build }}
+      kind: ${{ steps.s.outputs.kind }}
+      version: ${{ steps.s.outputs.version }}
+      pyversion: ${{ steps.s.outputs.pyversion }}
+      tag: ${{ steps.s.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Every tag: the last nightly's commit and the znightly-* names.
+          fetch-depth: 0
+
+      - id: s
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=$(sed -nE '/^project\(solvespace/,/\)/s/^[[:space:]]*VERSION[[:space:]]+([0-9.]+).*/\1/p' CMakeLists.txt | head -1)
+          [ -n "$base" ] || { echo "::error::no project VERSION in CMakeLists.txt"; exit 1; }
+          sha=$(git rev-parse HEAD)
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag=$GITHUB_REF_NAME
+            version=${tag#v}
+            if ! printf '%s\n' "$version" | grep -qE "^${base//./\\.}hc(\.[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[1-9][0-9]*)?)?$"; then
+              echo "::error::tag $tag is not v${base}hc or v${base}hc.YYYY.MM.DD[.N] for project VERSION $base"; exit 1
+            fi
+            kind=release
+          else
+            last=$(git rev-parse -q --verify 'refs/tags/nightly^{commit}' || true)
+            if [ "$sha" = "$last" ] && [ "${{ inputs.force }}" != "true" ]; then
+              echo "build=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::the nightly is already built from $sha; nothing to do"
+              exit 0
+            fi
+            # Taken once, here, so no artifact can disagree about the date.
+            day=$(date -u +%Y.%m.%d)
+            version=${base}hc.$day; n=0
+            while git rev-parse -q --verify "refs/tags/znightly-$version" >/dev/null; do
+              n=$((n + 1)); version=${base}hc.$day.$n
+            done
+            tag=znightly-$version
+            kind=nightly
+          fi
+          # Python wants a local version label: 3.3hc.2026.10.15 -> 3.3+hc.2026.10.15.
+          pyversion=${base}+hc${version#"${base}hc"}
+          {
+            echo "build=true"; echo "kind=$kind"; echo "version=$version"
+            echo "pyversion=$pyversion"; echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+          echo "::notice::$kind $version (Python $pyversion) from $sha"
+
+  # ---- source -------------------------------------------------------------
+  source:
+    name: Source
+    needs: stamp
+    if: needs.stamp.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+          fetch-depth: 0
+          path: solvespace
+      - name: Pack
+        shell: bash
+        env:
+          VERSION: ${{ needs.stamp.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd solvespace
+          # A tarball has no .git: record the commit where CMake would ask git.
+          sed -e 's/^\(include(GetGitCommitHash)\)/#\1/' \
+              -e 's/^# \(set(GIT_COMMIT_HASH\).*/\1 '"$GITHUB_SHA"')/' -i CMakeLists.txt
+          sed -i "s/^set(SOLVESPACE_HC_VERSION \"\${PROJECT_VERSION}hc\"/set(SOLVESPACE_HC_VERSION \"$VERSION\"/" CMakeLists.txt
+          grep -q "set(SOLVESPACE_HC_VERSION \"$VERSION\"" CMakeLists.txt
+          cd ..
+          mkdir -p dist
+          tar --exclude-vcs --transform "s:^solvespace:solvespace-$VERSION:" \
+              -caf "dist/solvespace-$VERSION.tar.xz" solvespace
+          ls -l dist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: hc-source
+          path: dist/*
+
+  # ---- macOS: the Mac mini, one architecture at a time ---------------------
+  macos:
+    name: macOS (${{ matrix.arch }})
+    needs: stamp
+    if: needs.stamp.outputs.build == 'true'
+    runs-on: [self-hosted, macOS, X64]
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        arch: [x86_64, arm64]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Bundled libraries
+        run: git submodule update --init --depth 1 extlib/cairo extlib/freetype extlib/libdxfrw extlib/libpng extlib/mimalloc extlib/pixman extlib/zlib extlib/eigen
+      - name: Build
+        run: /bin/bash .github/scripts/hc/build-macos.sh ${{ matrix.arch }} ${{ needs.stamp.outputs.version }} dist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: hc-macos-${{ matrix.arch }}
+          path: dist/*.dmg
+
+  # ---- Windows --------------------------------------------------------------
+  windows:
+    name: Windows (${{ matrix.arch }})
+    needs: stamp
+    if: needs.stamp.outputs.build == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86
+            os: windows-2022
+          - arch: x64
+            os: windows-2022
+          - arch: arm64
+            os: [self-hosted, Windows, ARM64]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+      - name: Build
+        shell: bash
+        run: .github/scripts/hc/build-windows.sh ${{ matrix.arch }} ${{ needs.stamp.outputs.version }} dist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: hc-windows-${{ matrix.arch }}
+          path: dist/*.exe
+
+  # ---- Linux: AppImage ------------------------------------------------------
+  appimage:
+    name: AppImage (${{ matrix.arch }})
+    needs: stamp
+    if: needs.stamp.outputs.build == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            os: ubuntu-22.04
+          - arch: aarch64
+            os: ubuntu-22.04-arm
+    steps:
+      - uses: actions/checkout@v6
+      - name: Bundled libraries
+        run: git submodule update --init --depth 1 extlib/libdxfrw extlib/mimalloc extlib/eigen
+      - name: Build
+        run: .github/scripts/hc/build-appimage.sh ${{ needs.stamp.outputs.version }} dist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: hc-appimage-${{ matrix.arch }}
+          path: dist/*.AppImage
+
+  # ---- Linux: Flatpak -------------------------------------------------------
+  flatpak:
+    name: Flatpak (${{ matrix.arch }})
+    needs: stamp
+    if: needs.stamp.outputs.build == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            os: ubuntu-24.04
+          - arch: aarch64
+            os: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+      - name: Bundled libraries
+        run: git submodule update --init --depth 1 extlib/libdxfrw extlib/mimalloc
+      # Ubuntu 24.04 confines the unprivileged user namespaces bubblewrap needs.
+      - name: Allow unprivileged user namespaces
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+      - name: Build
+        run: .github/scripts/hc/build-flatpak.sh ${{ needs.stamp.outputs.version }} dist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: hc-flatpak-${{ matrix.arch }}
+          path: dist/*.flatpak
+
+  # ---- Python: sdist and wheels (release assets, never PyPI) ----------------
+  python-sdist:
+    name: Python sdist
+    needs: stamp
+    if: needs.stamp.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - run: git submodule update --init --depth 1 extlib/mimalloc extlib/eigen
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i "s/^version = .*/version = \"${{ needs.stamp.outputs.pyversion }}\"/" pyproject.toml
+          python -m pip install -U build
+          python -m build --sdist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: hc-python-sdist
+          path: dist/*.tar.gz
+
+  python-wheel:
+    name: Python ${{ matrix.os_arch }} cp${{ matrix.python }}
+    needs: stamp
+    if: needs.stamp.outputs.build == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os_arch: [windows-x86, windows-x64, windows-arm64, macos-x86_64, macos-arm64, linux-x86_64, linux-aarch64]
+        python: ["38", "39", "310", "311", "312", "313", "314"]
+        include:
+          - {os_arch: windows-x86,   os: windows-2022,     platform: windows, cibw_arch: x86,     generator_platform: Win32}
+          - {os_arch: windows-x64,   os: windows-2022,     platform: windows, cibw_arch: AMD64,   generator_platform: x64}
+          - {os_arch: windows-arm64, os: [self-hosted, Windows, ARM64], platform: windows, cibw_arch: ARM64, generator_platform: ARM64}
+          - {os_arch: macos-x86_64,  os: macos-latest,     platform: macos,   cibw_arch: x86_64}
+          - {os_arch: macos-arm64,   os: macos-latest,     platform: macos,   cibw_arch: arm64}
+          - {os_arch: linux-x86_64,  os: ubuntu-22.04,     platform: linux,   cibw_arch: x86_64}
+          - {os_arch: linux-aarch64, os: ubuntu-22.04-arm, platform: linux,   cibw_arch: aarch64}
+        exclude:
+          # Windows on Arm has Python from 3.11 only.
+          - {os_arch: windows-arm64, python: "38"}
+          - {os_arch: windows-arm64, python: "39"}
+          - {os_arch: windows-arm64, python: "310"}
+    steps:
+      - uses: actions/checkout@v6
+      - run: git submodule update --init --depth 1 extlib/mimalloc extlib/eigen
+      - name: Set version
+        shell: bash
+        run: sed -i.bak "s/^version = .*/version = \"${{ needs.stamp.outputs.pyversion }}\"/" pyproject.toml && rm pyproject.toml.bak
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v3.4.0
+        env:
+          CIBW_BUILD: "cp${{ matrix.python }}-*"
+          CIBW_PLATFORM: ${{ matrix.platform }}
+          CIBW_ARCHS: ${{ matrix.cibw_arch }}
+          CIBW_ENVIRONMENT_WINDOWS: >
+            CMAKE_GENERATOR="Visual Studio 17 2022"
+            CMAKE_GENERATOR_PLATFORM="${{ matrix.generator_platform }}"
+          CIBW_ENVIRONMENT_PASS_WINDOWS: "CMAKE_GENERATOR CMAKE_GENERATOR_PLATFORM"
+          CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=10.12
+      - uses: actions/upload-artifact@v6
+        with:
+          name: hc-python-${{ matrix.os_arch }}-cp${{ matrix.python }}
+          path: wheelhouse/*.whl
+
+  # ---- publish ----------------------------------------------------------------
+  publish:
+    name: Publish
+    needs: [stamp, source, macos, windows, appimage, flatpak, python-sdist, python-wheel]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      KIND: ${{ needs.stamp.outputs.kind }}
+      VERSION: ${{ needs.stamp.outputs.version }}
+      PYVERSION: ${{ needs.stamp.outputs.pyversion }}
+      TAG: ${{ needs.stamp.outputs.tag }}
+      SHA: ${{ github.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          pattern: hc-*
+      - name: Collect
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release python
+          # The Python wheels and sdist travel as one archive; the files inside
+          # keep the names pip requires.
+          find artifacts -path 'artifacts/hc-python-*' -type f -exec cp -n {} python/ \;
+          find artifacts -type f -not -path 'artifacts/hc-python-*' -exec cp -n {} release/ \;
+          ls python/*.whl >/dev/null 2>&1 || { echo "::error::no wheels"; exit 1; }
+          ls python/*.tar.gz >/dev/null 2>&1 || { echo "::error::no Python sdist"; exit 1; }
+          (cd python && zip -q -9 "../release/slvs-python-$PYVERSION.zip" -- *)
+          echo "slvs-python-$PYVERSION.zip: $(ls python | wc -l) files"
+          (cd release && sha256sum -- * > SHA256SUMS)
+          ls -la release
+          # Every kind this release promises, or nothing is published.
+          missing=0
+          for kind in '*.tar.xz' '*-macos-x86_64.dmg' '*-macos-arm64.dmg' \
+                      '*-windows-x86.exe' '*-windows-x64.exe' '*-windows-arm64.exe' \
+                      '*-linux-x86_64.AppImage' '*-linux-aarch64.AppImage' \
+                      '*-linux-x86_64.flatpak' '*-linux-aarch64.flatpak' 'slvs-python-*.zip'; do
+            ls release/$kind >/dev/null 2>&1 || { echo "::error::no $kind among the assets"; missing=1; }
+          done
+          [ "$missing" -eq 0 ]
+
+      - name: Notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="https://github.com/${{ github.repository }}"
+          {
+            if [ "$KIND" = nightly ]; then
+              echo "**SolveSpace $VERSION**, the HobbyCAD build, a dated build of master at [\`${SHA:0:12}\`]($repo/commit/$SHA). It is replaced by the next one whenever master changes."
+            else
+              echo "**SolveSpace $VERSION**, the HobbyCAD build, at [\`${SHA:0:12}\`]($repo/commit/$SHA)."
+            fi
+            echo
+            echo "Where this build differs from upstream SolveSpace is listed at the top of the [README]($repo#the-hobbycad-build)."
+            echo
+            echo "### Installing"
+            echo
+            echo "- **macOS:** the \`arm64\` DMG for Apple Silicon (macOS 11 or later), the \`x86_64\` DMG for Intel (macOS 10.12 or later, with OpenMP). The app is not notarized: the first time, right-click it and choose **Open**."
+            echo "- **Windows:** run the \`.exe\` for your processor (\`x64\` for most PCs, \`arm64\` for Windows on Arm, \`x86\` for 32-bit Windows); nothing is installed. Not code-signed, so SmartScreen may ask: **More info**, then **Run anyway**."
+            echo "- **Linux:** make the AppImage executable and run it, or \`flatpak install --user <file>.flatpak\`."
+            echo "- **Python:** unzip \`slvs-python-$PYVERSION.zip\` and \`pip install\` the wheel for your Python and platform (or build from the sdist inside); published here only, not on PyPI."
+            echo
+            echo "Check a download against \`SHA256SUMS\`."
+          } > notes.md
+          cat notes.md
+
+      # Nightly: the history tag first, so it records this build's commit even
+      # if the release step fails, then the "nightly" pre-release is replaced
+      # rather than edited, so its tag moves and its date is the build's.
+      - name: Publish the nightly
+        if: needs.stamp.outputs.kind == 'nightly'
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${{ github.repository }}/git/refs" -f ref="refs/tags/$TAG" -f sha="$SHA" >/dev/null
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release delete nightly --cleanup-tag --yes
+          fi
+          git push --delete origin nightly 2>/dev/null || true
+          gh release create nightly --target "$SHA" --prerelease \
+            --title "SolveSpace $VERSION (HobbyCAD nightly)" --notes-file notes.md release/*
+
+      - name: Publish the release
+        if: needs.stamp.outputs.kind == 'release'
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" --verify-tag --title "SolveSpace $VERSION (HobbyCAD build)" \
+            --notes-file notes.md release/*

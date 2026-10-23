@@ -52,8 +52,35 @@ include(GetGitCommitHash)
 
 string(SUBSTRING "${GIT_COMMIT_HASH}" 0 8 solvespace_GIT_HASH)
 project(solvespace
-    VERSION 3.2
+    VERSION 3.3
     LANGUAGES C CXX ASM)
+
+# The version this HobbyCAD build reports: 3.3hc for the release on upstream
+# 3.3, and 3.3hc.YYYY.MM.DD (.N for a second build that day) for a dated
+# build, which the release workflow passes in.
+set(SOLVESPACE_HC_VERSION "${PROJECT_VERSION}hc" CACHE STRING
+    "Version this HobbyCAD build reports, e.g. 3.3hc or 3.3hc.2026.10.15")
+
+# slvs.h spells both versions by hand; stop here if an upstream version bump
+# left them behind, rather than ship a library naming the old one. The dated
+# version the library reports at run time (Slvs_GetVersion) must extend the
+# header's.
+string(REPLACE "." "\\." _hc_ver_re "${PROJECT_VERSION}")
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/slvs.h" _slvs_upstream_line
+     REGEX "^#define SLVS_UPSTREAM_VERSION_STRING")
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/slvs.h" _slvs_hc_line
+     REGEX "^#define SLVS_VERSION_STRING")
+if(NOT _slvs_upstream_line MATCHES "\"${_hc_ver_re}\""
+   OR NOT _slvs_hc_line MATCHES "\"${_hc_ver_re}hc\"")
+    message(FATAL_ERROR "include/slvs.h says ${_slvs_upstream_line} and "
+        "${_slvs_hc_line}, but the project is ${PROJECT_VERSION}: they must be "
+        "\"${PROJECT_VERSION}\" and \"${PROJECT_VERSION}hc\".")
+endif()
+if(NOT SOLVESPACE_HC_VERSION MATCHES
+       "^${_hc_ver_re}hc(\\.[0-9][0-9][0-9][0-9]\\.[0-9][0-9]\\.[0-9][0-9](\\.[0-9]+)?)?$")
+    message(FATAL_ERROR "SOLVESPACE_HC_VERSION is ${SOLVESPACE_HC_VERSION}; it "
+        "must be ${PROJECT_VERSION}hc or ${PROJECT_VERSION}hc.YYYY.MM.DD[.N].")
+endif()
 
 if(EMSCRIPTEN)
     # Enable optimization. Workaround for "too many locals" error when runs in the browser.
@@ -231,9 +258,7 @@ if(ENABLE_SANITIZERS)
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         set(SANITIZE_FLAGS "${SANITIZE_FLAGS} -fno-omit-frame-pointer -fno-optimize-sibling-calls")
-    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-        set(SANITIZE_FLAGS "${SANITIZE_FLAGS} -fuse-ld=gold")
-    elseif(NOT MSVC)
+    elseif(NOT MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU")
         message(FATAL_ERROR "Sanitizers are only available when using MSVC, GCC, or Clang")
     endif()
 

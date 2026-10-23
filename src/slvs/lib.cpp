@@ -74,6 +74,18 @@ void Slvs_SetFatalErrorHandler(Slvs_FatalErrorHandler handler, void *context) {
     g_fatalErrorContext = context;
 }
 
+const char *Slvs_GetVersion(void) {
+    return SLVS_LIBRARY_VERSION;
+}
+
+bool Slvs_CheckAbi(int abiVersion, size_t systemSize,
+                   size_t entitySize, size_t constraintSize) {
+    return abiVersion == SLVS_ABI_VERSION
+        && systemSize == sizeof(Slvs_System)
+        && entitySize == sizeof(Slvs_Entity)
+        && constraintSize == sizeof(Slvs_Constraint);
+}
+
 static ConstraintBase::Type Slvs_CTypeToConstraintBaseType(int type) {
     switch(type) {
 case SLVS_C_POINTS_COINCIDENT:   return ConstraintBase::Type::POINTS_COINCIDENT;

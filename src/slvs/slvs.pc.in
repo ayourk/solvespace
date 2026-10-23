@@ -3,9 +3,9 @@ exec_prefix=${prefix}
 libdir=@PKGCONFIG_LIBDIR@
 includedir=@PKGCONFIG_INCLUDEDIR@
 
-Name: slvs
-Description: SolveSpace geometric constraint solver library
-URL: https://solvespace.com/
-Version: @PROJECT_VERSION@
-Libs: -L${libdir} -lslvs
-Cflags: -I${includedir}
+Name: slvshc
+Description: SolveSpace geometric constraint solver library, HobbyCAD fork
+URL: https://github.com/ayourk/solvespace
+Version: @SOLVESPACE_HC_VERSION@
+Libs: -L${libdir} -lslvshc
+Cflags: -I${includedir}/slvshc
